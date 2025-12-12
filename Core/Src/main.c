@@ -27,7 +27,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "task.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -71,7 +71,13 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
+  BaseType_t xTransmitTaskReturned;
+  BaseType_t xReceiveTaskReturned;
+  BaseType_t xADCSCommandTaskReturned;
 
+  TaskHandle_t xTransmitHandle = NULL;
+  TaskHandle_t xReceiveHandle = NULL;
+  TaskHandle_t xADCSCommandHandle = NULL;
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -80,7 +86,32 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
+  xTransmitTaskReturned = xTaskCreate(
+                            vTransmitTask,
+                            "Transmit",
+                            TRANSMIT_STACK_SIZE,
+                            NULL,
+                            2,
+                            &xTransmitHandle);
 
+  
+  xReceiveTaskReturned = xTaskCreate(
+                          vReceiveTask,
+                          "Receive",
+                          RECEIVE_STACK_SIZE,
+                          NULL,
+                          1,
+                          &xReceiveHandle);
+
+  xADCSCommandTaskReturned = xTaskCreate(
+                              vADCSCommandTask,
+                              "ADCSCommand",
+                              ADCS_COMMAND_STACK_SIZE,
+                              NULL,
+                              3,
+                              &xADCSCommandHandle);
+  
+    
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -100,18 +131,19 @@ int main(void)
   /* USER CODE END 2 */
 
   /* Init scheduler */
-  osKernelInitialize();
+  //osKernelInitialize();
 
   /* Call init function for freertos objects (in cmsis_os2.c) */
   MX_FREERTOS_Init();
 
   /* Start scheduler */
-  osKernelStart();
+  //osKernelStart();
 
   /* We should never get here as control is now taken by the scheduler */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  vTaskStartScheduler();
   while (1)
   {
     /* USER CODE END WHILE */
@@ -175,6 +207,32 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+void vTransmitTask(void *pvParameters) {
+
+  for(;;) {
+
+  }
+
+  vTaskDelete(NULL);
+}
+
+void vReceiveTask(void * pvParameters) {
+
+  for(;;) {
+
+  }
+
+  vTaskDelete(NULL);
+}
+
+void vADCSCommandTask(void * pvParameters) {
+
+  for(;;) {
+
+  }
+
+  vTaskDelete(NULL);
+}
 
 /* USER CODE END 4 */
 

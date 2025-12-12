@@ -41,7 +41,9 @@ extern "C" {
 
 /* Exported constants --------------------------------------------------------*/
 /* USER CODE BEGIN EC */
-
+#define TRANSMIT_STACK_SIZE 128
+#define RECEIVE_STACK_SIZE 128
+#define ADCS_COMMAND_STACK_SIZE 128
 /* USER CODE END EC */
 
 /* Exported macro ------------------------------------------------------------*/
@@ -59,7 +61,9 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 
 /* USER CODE BEGIN Private defines */
-
+void vTransmitTask(void * pvParameters);
+void vReceiveTask(void * pvParameters);
+void vADCSCommandTask(void * pvParameters);
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus
