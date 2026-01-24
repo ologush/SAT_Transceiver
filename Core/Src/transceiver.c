@@ -1,46 +1,19 @@
 #include "transceiver.h"
-
-
-
 #include "adi_adf7030-1_reg.h"
-#include "adf7030-1__common.h"
-#include "adf7030-1__core.h"
-#include "adf7030-1__irq.h"
-#include "adf7030-1__spi.h"
-#include "adf7030-1__mem.h"
-#include "adf7030-1__patch.h"
-#include "adf7030-1__cfg.h"
-#include "adf7030-1__state.h"
-#include "adf7030-1__gpio.h"
 
-#include "adf703x_utils.h"
+static TRANSCEIVER_ERR_e configure_radio_PHY();
 
-uint8_t deviceMem[ADI_ADF7030_1_MEMORY_SIZE];
 
-ADI_ADF7030_1_HANDLE hADF7030_1;
+static TRANSCEIVER_ERR_e configure_radio_PHY() {
 
-static void ADF7030_1_Callback(void *pCBParam, uint32_t Event, void *pArg) {
+
 
 }
 
 TRANSCEIVER_ERR_e transceiver_init(void) {
     ADI_ADF7030_1_RESULT eResult;
 
-    eResult = adf7030_1__Open(ADF7030_1_INSTANCE_NUM,
-                                   deviceMem,
-                                   ADI_ADF7030_1_MEMORY_SIZE,
-                                   ADF7030_1_Callback,
-                                   NULL,
-                                   &hADF7030_1));
 
-    if (eResult != ADI_ADF7030_1_SUCCESS) {
-        return TRANSCEIVER_ERR_ERROR;
-    }
-
-    eResult = adf7030_1__Setup(&hADF7030_1,
-                                );
-
-    eResult = adf7030_1__Enable();
 }
 
 #ifdef LOAD_CONFIG

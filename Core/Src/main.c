@@ -24,6 +24,7 @@
 #include "usart.h"
 #include "usb_device.h"
 #include "gpio.h"
+#include "transceiver.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -131,13 +132,13 @@ int main(void)
   /* USER CODE END 2 */
 
   /* Init scheduler */
-  //osKernelInitialize();
+  osKernelInitialize();
 
   /* Call init function for freertos objects (in cmsis_os2.c) */
   MX_FREERTOS_Init();
 
   /* Start scheduler */
-  //osKernelStart();
+  osKernelStart();
 
   /* We should never get here as control is now taken by the scheduler */
 
