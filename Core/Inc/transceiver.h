@@ -30,15 +30,15 @@ typedef struct {
 } ADF7030_s;
 
 enum {
-    ADF7030_DEST_PHY_SLEEP = 0x00,
-    ADF7030_DEST_PHY_OFF   = 0x01,
-    ADF7030_DEST_PHY_ON    = 0x02,
-    ADF7030_DEST_PHY_RX    = 0x03,
-    ADF7030_DEST_PHY_TX    = 0x04,
-    ADF7030_DEST_CFG_DEV   = 0x05
+    ADF7030_PHY_SLEEP = 0x00,
+    ADF7030_PHY_OFF   = 0x01,
+    ADF7030_PHY_ON    = 0x02,
+    ADF7030_PHY_RX    = 0x03,
+    ADF7030_PHY_TX    = 0x04,
+    ADF7030_CFG_DEV   = 0x05
 } ADF7030_STATE_MACHINE_e;
 
-TRANSCEIVER_ERR_e ADF7030_init(void);
+TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, uint16_t cs_pin, GPIO_TypeDef *rst_port, uint16_t cs_pin);
 TRANSCEIVER_ERR_e ADF7030_loadCalibration(void);
 TRANSCEIVER_ERR_e ADF7030_getTemperature(float *temp);
 TRANSCEIVER_ERR_e ADF7030_transmitPacket(uint8_t *packet);

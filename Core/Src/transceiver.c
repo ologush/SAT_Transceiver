@@ -1,11 +1,11 @@
 #include "transceiver.h"
 #include "adi_adf7030-1_reg.h"
 
-ADF7030_s transceiver;
-ADF7030_STATE_MACHINE_e transceiver_state;
+static ADF7030_s transceiver;
+static ADF7030_STATE_MACHINE_e transceiver_state;
 
-static TRANSCEIVER_ERR_e SPI_txrx();
-static TRANSCEIVER_ERR_e SPI_rx();
+static TRANSCEIVER_ERR_e SPI_txrx(ADF7030_s *target, uint8_t *tx, uint8_t *rx, uint16_t size);
+static TRANSCEIVER_ERR_e SPI_tx(ADF7030_s *target, uint8_t *tx, uint16_t size);
 
 static TRANSCEIVER_ERR_e SPI_txrx(ADF7030_s *target, uint8_t *tx, uint8_t *rx, uint16_t size) {
 
@@ -15,7 +15,7 @@ static TRANSCEIVER_ERR_e SPI_txrx(ADF7030_s *target, uint8_t *tx, uint8_t *rx, u
 
 }
 
-static TRANSCEIVER_ERR_e SPI_tx(ADF7030_s *target, uint8_t *tx, uint8_t *rx, uint16_t size) {
+static TRANSCEIVER_ERR_e SPI_tx(ADF7030_s *target, uint8_t *tx, uint16_t size) {
 
     HAL_GPIO_WritePin(target->cs_port, target->cs_pin, GPIO_PIN_RESET);
     HAL_SPI_Transmit(target->hspi, tx, size, target->spi_timeout);
@@ -23,8 +23,21 @@ static TRANSCEIVER_ERR_e SPI_tx(ADF7030_s *target, uint8_t *tx, uint8_t *rx, uin
 
 }
 
-TRANSCEIVER_ERR_e ADF7030_init(void) {
-    ADI_ADF7030_1_RESULT eResult;
+TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, uint16_t cs_pin, GPIO_TypeDef *rst_port, uint16_t cs_pin) {
+
+    transceiver.hspi = hspi;
+    transceiver.cs_port = cs_port;
+    transceiver.cs_pin = cs_pin;
+    transceiver.rst_port = rst_port;
+    transceiver.rst_pin = rst_pin;
+
+    transceiver_state = ADF7030_PHY_OFF;
+
+#ifdef LOAD_CONFIG
+    ADF7030_1_loadConfig();
+#endif
+
+
 
 }
 
@@ -33,7 +46,32 @@ const uint8_t Radio_Memory_Configuration[] = {
     #include "Settings_ADF7030-1.cfg"
 }
 TRANSCEIVER_ERR_e ADF7030_1_loadConfig(void) {
-    
+
+    uint32_t cfg_len = sizeof(Radio_Memory_Configuration);
+    uint32_t i = 0;
+    while (i <= cfg_len) {
+
+        uint32_t block_len;
+
+        block_len = (Radio_Memory_Configuration[i] << 16) | (Radio_Memory_Configuration[i + 1] << 8) | (Radio_Memory_Configuration[i + 2]) - 3;
+
+        if (block_len < 3) {
+            return TRANSCEIVER_ERR_ERROR;
+        }
+
+        block_len -= 3;
+        i += 3;
+
+        if (i + block_len > cfg_len) {
+            return TRANSCEIVER_ERR_ERROR;
+        }
+
+        SPI_tx(transceiver.hspi, &Radio_Memory_Configuration[i], block_len);
+
+        i += block_len;
+
+    }
+
     return TRANSCEIVER_ERR_OK;
 }
 #endif
