@@ -2,7 +2,7 @@
 #include "adi_adf7030-1_reg.h"
 
 static ADF7030_s transceiver;
-static ADF7030_STATE_MACHINE_e transceiver_state;
+static ADF7030_MACHINE_e transceiver_state;
 
 static TRANSCEIVER_ERR_e SPI_txrx(ADF7030_s *target, uint8_t *tx, uint8_t *rx, uint16_t size);
 static TRANSCEIVER_ERR_e SPI_tx(ADF7030_s *target, uint8_t *tx, uint16_t size);
@@ -50,7 +50,9 @@ TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, u
 
     transceiver_state = ADF7030_PHY_OFF;
 
-    SPI_host_initialization(&transceiver, 50);
+    if(SPI_host_initialization(&transceiver, 50) == TRANSCEIVER_ERR_ERROR) {
+        return TRANSCEIVER_ERR_ERROR;
+    }
 
 #ifdef LOAD_CONFIG
     ADF7030_1_loadConfig();
@@ -163,4 +165,37 @@ TRANSCEIVER_ERR_e ADF7030_1_receivePacket(uint8_t *packet) {
     
 
     return TRANSCEIVER_ERR_OK;
+}
+
+TRANSCEIVER_ERR_e ADF7030_transitionState(ADF7030_STATE_MACHINE_e target_state) {
+
+    uint8_t command = (1 << 7) | target_state;
+    SPI_tx(&transceiver, &command, 1);
+
+}
+
+ADF7030_STATE_e ADF7030_getState() {
+    
+}
+
+ADF7030_TRANSITION_STATUS_e ADF7030_getTransitionStatus() {
+
+    uint8_t command = 0xFF;
+    uint8_t status_byte = 0;
+    SPI_txrx(&transceiver, &command, &status_byte, 1);
+
+    ADF7030_TRANSITION_STATUS_e status = (status >> 1) & 0x03;
+
+    return status;
+}
+
+ADF7030_READY_STATE_e ADF7030_getReadyState() {
+
+    uint8_t command = 0xFF;
+    uint8_t status_byte = 0;
+    SPI_txrx(&transceiver, &command, &status_byte, 1);
+
+    ADF7030_READY_STATE_e state = (status_byte >> 4) & 0x01;
+
+    return state;
 }

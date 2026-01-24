@@ -32,20 +32,46 @@ typedef struct {
     uint32_t spi_timeout;
 } ADF7030_s;
 
-enum {
+typedef enum {
     ADF7030_PHY_SLEEP = 0x00,
     ADF7030_PHY_OFF   = 0x01,
     ADF7030_PHY_ON    = 0x02,
     ADF7030_PHY_RX    = 0x03,
     ADF7030_PHY_TX    = 0x04,
-    ADF7030_CFG_DEV   = 0x05
-} ADF7030_STATE_MACHINE_e;
+    ADF7030_CFG_DEV   = 0x05,
+    ADF7030_CCA       = 0x06,
+    ADF7030_DO_CAL    = 0x09,
+    ADF7030_GPCLK     = 0x10,
+    ADF7030_MON       = 0x0A,
+    ADF7030_LFRC_CAL  = 0x0C
+} ADF7030_STATE_e;
+
+typedef enum {
+    ADF7030_TRANSITION      = 0x00,
+    ADF7030_XQ_IN_STATE     = 0x01,
+    ADF7030_IDLE_IN_STATE   = 0x02
+} ADF7030_TRANSITION_STATUS_e;
+
+typedef enum {
+    ADF7030_MEMORY_CMD = 0x00,
+    ADF7030_RADIO_CMD  = 0x01
+} ADF7030_CMD_TYPE_e;
+
+typedef enum {
+    ADF7030_NOT_READY   = 0x00,
+    ADF7030_READY       = 0x01
+} ADF7030_READY_STATE_e;
 
 TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, uint16_t cs_pin, GPIO_TypeDef *rst_port, uint16_t rst_pin, GPIO_TypeDef *miso_port, uint16_t miso_pin);
 TRANSCEIVER_ERR_e ADF7030_loadCalibration(void);
 TRANSCEIVER_ERR_e ADF7030_getTemperature(float *temp);
 TRANSCEIVER_ERR_e ADF7030_transmitPacket(uint8_t *packet);
 TRANSCEIVER_ERR_e ADF7030_receivePacket(uint8_t *packet);
+TRANSCEIVER_ERR_e ADF7030_transitionState(ADF7030_STATE_e target_state);
+ADF7030_STATE_e ADF7030_getState(void);
+ADF7030_TRANSITION_STATUS_e ADF7030_getTransitionStatus(void);
+ADF7030_READY_STATE_e ADF7030_getReadyState(void);
+
 
 
 #ifdef LOAD_CONFIG
