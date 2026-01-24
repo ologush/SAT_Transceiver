@@ -17,12 +17,32 @@ typedef struct {
     uint8_t payload[128];
 } data_packet_s;
 
-TRANSCEIVER_ERR_e transceiver_init(void);
+typedef struct {
+    SPI_HandleTypeDef *hspi;
 
-TRANSCEIVER_ERR_e ADF7030_1_loadCalibration(void);
-TRANSCEIVER_ERR_e ADF7030_1_getTemperature(float *temp);
-TRANSCEIVER_ERR_e ADF7030_1_transmitPacket(uint8_t *packet);
-TRANSCEIVER_ERR_e ADF7030_1_receivePacket(uint8_t *packet);
+    GPIO_TypeDef *cs_port;
+    uint16_t cs_pin;
+
+    GPIO_TypeDef *rst_port;
+    uint16_t rst_pin;
+
+    uint32_t spi_timeout;
+} ADF7030_s;
+
+enum {
+    ADF7030_DEST_PHY_SLEEP = 0x00,
+    ADF7030_DEST_PHY_OFF   = 0x01,
+    ADF7030_DEST_PHY_ON    = 0x02,
+    ADF7030_DEST_PHY_RX    = 0x03,
+    ADF7030_DEST_PHY_TX    = 0x04,
+    ADF7030_DEST_CFG_DEV   = 0x05
+} ADF7030_STATE_MACHINE_e;
+
+TRANSCEIVER_ERR_e ADF7030_init(void);
+TRANSCEIVER_ERR_e ADF7030_loadCalibration(void);
+TRANSCEIVER_ERR_e ADF7030_getTemperature(float *temp);
+TRANSCEIVER_ERR_e ADF7030_transmitPacket(uint8_t *packet);
+TRANSCEIVER_ERR_e ADF7030_receivePacket(uint8_t *packet);
 
 
 #ifdef LOAD_CONFIG

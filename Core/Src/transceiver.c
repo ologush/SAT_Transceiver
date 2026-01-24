@@ -1,18 +1,30 @@
 #include "transceiver.h"
 #include "adi_adf7030-1_reg.h"
 
-static TRANSCEIVER_ERR_e configure_radio_PHY();
+ADF7030_s transceiver;
+ADF7030_STATE_MACHINE_e transceiver_state;
 
+static TRANSCEIVER_ERR_e SPI_txrx();
+static TRANSCEIVER_ERR_e SPI_rx();
 
-static TRANSCEIVER_ERR_e configure_radio_PHY() {
+static TRANSCEIVER_ERR_e SPI_txrx(ADF7030_s *target, uint8_t *tx, uint8_t *rx, uint16_t size) {
 
-
+    HAL_GPIO_WritePin(target->cs_port, target->cs_pin, GPIO_PIN_RESET);
+    HAL_SPI_TransmitReceive(target->hspi, tx, rx, size, target->spi_timeout);
+    HAL_GPIO_Write_Pin(target->cs_port, target->cs_pin, GPIO_PIN_SET);
 
 }
 
-TRANSCEIVER_ERR_e transceiver_init(void) {
-    ADI_ADF7030_1_RESULT eResult;
+static TRANSCEIVER_ERR_e SPI_tx(ADF7030_s *target, uint8_t *tx, uint8_t *rx, uint16_t size) {
 
+    HAL_GPIO_WritePin(target->cs_port, target->cs_pin, GPIO_PIN_RESET);
+    HAL_SPI_Transmit(target->hspi, tx, size, target->spi_timeout);
+    HAL_GPIO_Write_Pin(target->cs_port, target->cs_pin, GPIO_PIN_SET);
+
+}
+
+TRANSCEIVER_ERR_e ADF7030_init(void) {
+    ADI_ADF7030_1_RESULT eResult;
 
 }
 
