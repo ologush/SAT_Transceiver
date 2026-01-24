@@ -6,6 +6,7 @@ static ADF7030_STATE_MACHINE_e transceiver_state;
 
 static TRANSCEIVER_ERR_e SPI_txrx(ADF7030_s *target, uint8_t *tx, uint8_t *rx, uint16_t size);
 static TRANSCEIVER_ERR_e SPI_tx(ADF7030_s *target, uint8_t *tx, uint16_t size);
+static TRANSCEIVER_ERR_e SPI_host_initialization(ADF7030_s *target);
 
 static TRANSCEIVER_ERR_e SPI_txrx(ADF7030_s *target, uint8_t *tx, uint8_t *rx, uint16_t size) {
 
@@ -23,7 +24,23 @@ static TRANSCEIVER_ERR_e SPI_tx(ADF7030_s *target, uint8_t *tx, uint16_t size) {
 
 }
 
-TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, uint16_t cs_pin, GPIO_TypeDef *rst_port, uint16_t cs_pin) {
+static TRANSCEIVER_ERR_e SPI_host_initialization(ADF7030_s *target, uint32_t timeout_ms) {
+
+    HAL_GPIO_WritePin(target->cs_port, target->cs_pin, GPIO_PIN_RESET);
+    uint32_t start = HAL_GetTick();
+
+    while (HAL_GPIO_ReadPin(target->miso_port, target->miso_pin) == GPIO_PIN_RESET) {
+
+        if ((HAL_GetTick() - start) > timeout_ms) {
+            return TRANSCEIVER_ERR_ERROR;
+        }
+    }
+
+    HAL_GPIO_WritePin(target->cs_port, target->cs_pin, GPIO_PIN_SET);
+
+}
+
+TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, uint16_t cs_pin, GPIO_TypeDef *rst_port, uint16_t rst_pin, GPIO_HandleTypeDef miso_port, uint16_t miso_pin) {
 
     transceiver.hspi = hspi;
     transceiver.cs_port = cs_port;
@@ -33,11 +50,11 @@ TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, u
 
     transceiver_state = ADF7030_PHY_OFF;
 
+    SPI_host_initialization(&transceiver, 50);
+
 #ifdef LOAD_CONFIG
     ADF7030_1_loadConfig();
 #endif
-
-
 
 }
 
