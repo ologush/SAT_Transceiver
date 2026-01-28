@@ -64,15 +64,14 @@ TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, u
 const uint8_t Radio_Memory_Configuration[] = {
     #include "Settings_ADF7030-1.cfg"
 }
-TRANSCEIVER_ERR_e ADF7030_1_loadConfig(void) {
+TRANSCEIVER_ERR_e ADF7030_1_loadConfig(uint8_t config[], uint32_t len) {
 
-    uint32_t cfg_len = sizeof(Radio_Memory_Configuration);
     uint32_t i = 0;
-    while (i <= cfg_len) {
+    while (i <= len) {
 
         uint32_t block_len;
 
-        block_len = (Radio_Memory_Configuration[i] << 16) | (Radio_Memory_Configuration[i + 1] << 8) | (Radio_Memory_Configuration[i + 2]) - 3;
+        block_len = (config[i] << 16) | (config[i + 1] << 8) | (config[i + 2]) - 3;
 
         if (block_len < 3) {
             return TRANSCEIVER_ERR_ERROR;
@@ -81,11 +80,11 @@ TRANSCEIVER_ERR_e ADF7030_1_loadConfig(void) {
         block_len -= 3;
         i += 3;
 
-        if (i + block_len > cfg_len) {
+        if (i + block_len > len) {
             return TRANSCEIVER_ERR_ERROR;
         }
 
-        SPI_tx(transceiver.hspi, &Radio_Memory_Configuration[i], block_len);
+        SPI_tx(transceiver.hspi, &config[i], block_len);
 
         i += block_len;
 
@@ -99,21 +98,50 @@ TRANSCEIVER_ERR_e ADF7030_1_loadConfig(void) {
 const uint8_t Calibration[] = {
     #include "OffLineCalibrations.cfg"
 }
+
+const uint32_t cal_len = sizeof(Calibration);
+
 TRANSCEIVER_ERR_e ADF7030_1_calibrate(void) {
 
-    //Write CAL_ENABLE (0x20002971) key to the SM_DATA_CALIBRATION register to enable calibration
 
-    //Issue CMD_CFG_DEV configuration command
-
-    //When the radio returns to the PHY_OFF state from the configuring state, issue the CMD_PHY_ON command to place the ADF7030-1 in the PHY_ON state
-
-    //In the PHY_ON state issue the CMD_DO_CAL command. Typically takes 630 ms
-
-    //On complettion, the radio autonomously returns to the PHY_ON state and the CAL_SUCCESS bit in the PROFILE_RADIO_CAL_CFG1 register is set to 1
-
-    //Write the CAL_DISABLE (0x20002A21) key to SM_DATA_CALIBRATION
+    if (transceiver_state != ADF7030_PHY_OFF) {
+        return TRANSCEIVER_ERR_ERROR;
+    }
 
 
+    ADF7030_1_loadConfiguration(Calibration, cal_len);
+    ADF7030_memoryWrite(SM_DATA_CALIBRATION_Addr, 0x20002971);
+
+    ADF7030_transitionState(ADF7030_CFG_DEV);
+    
+    //wait until it returns to PHY_OFF
+
+    while(ADF7030_getTransitionStatus() != ADF7030_IDLE_IN_STATE);
+
+    if(ADF7030_getState() != ADF7030_PHY_OFF) {
+        return TRANSCEIVER_ERR_ERROR;
+    }
+
+    ADF7030_transitionState(ADF7030_PHY_ON);
+
+    ADF7030_transitionState(ADF7030_DO_CAL);
+
+    HAL_Delay(630);
+
+    uint8_t reg_data[4] = {0};
+
+    union {
+        uint8_t arr[4];
+        uint32_t word;
+    } reg_data {.word = 0};
+
+    ADF7030_memoryRead(PROFILE_RADIO_CAL_CFG1_Addr, reg_data);
+
+    if(ADF7030_getState() != ADF7030_PHY_ON || (reg_data.word & 0x20000000) != 0x20000000) {
+        return TRANSCEIVER_ERR_ERROR;
+    }
+
+    ADF7030_memoryWrite(SM_DATA_CALIBRATION_Addr, 0x20002A21)
 
     return TRANSCEIVER_ERR_OK;
 }
@@ -202,7 +230,7 @@ ADF7030_READY_STATE_e ADF7030_getReadyState() {
     return state;
 }
 
-TRANSCEIVER_ERR_e ADF7030_memoryWrite(uint32_t address, uint8_t data[8]) {
+TRANSCEIVER_ERR_e ADF7030_memoryWrite(uint32_t address, uint32_t data) {
     
     uint8_t command = 0x38;
 
@@ -213,10 +241,10 @@ TRANSCEIVER_ERR_e ADF7030_memoryWrite(uint32_t address, uint8_t data[8]) {
     data_stream[3] = (uint8_t) (address >> 4) & 0xF;
     data_stream[4] = (uint8_t) (address) & 0xF;
 
-    data_stream[5] = data[0];
-    data_stream[6] = data[1];
-    data_stream[7] = data[2];
-    data_stream[8] = data[3];
+    data_stream[5] = (uint8_t) (data >> 12);
+    data_stream[6] = (uint8_t) (data >> 8) & 0xF;
+    data_stream[7] = (uint8_t) (data >> 4) & 0xF;
+    data_stream[8] = (uint8_t) (data) & 0xF;
 
     SPI_tx(&transceiver, &data_stream, 9);
 
