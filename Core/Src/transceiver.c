@@ -108,9 +108,15 @@ TRANSCEIVER_ERR_e ADF7030_1_calibrate(void) {
         return TRANSCEIVER_ERR_ERROR;
     }
 
+    union {
+        uint8_t arr[4];
+        uint32_t word;
+    } reg_data {.word = 0};
+
+    reg_data.word = 0x20002971;
 
     ADF7030_1_loadConfiguration(Calibration, cal_len);
-    ADF7030_memoryWrite(SM_DATA_CALIBRATION_Addr, 0x20002971);
+    ADF7030_memoryWrite(SM_DATA_CALIBRATION_Addr, reg_data.arr, 4);
 
     ADF7030_transitionState(ADF7030_CFG_DEV);
     
@@ -126,12 +132,7 @@ TRANSCEIVER_ERR_e ADF7030_1_calibrate(void) {
 
     HAL_Delay(630);
 
-    uint8_t reg_data[4] = {0};
 
-    union {
-        uint8_t arr[4];
-        uint32_t word;
-    } reg_data {.word = 0};
 
     ADF7030_memoryRead(PROFILE_RADIO_CAL_CFG1_Addr, reg_data.arr);
 
@@ -139,7 +140,9 @@ TRANSCEIVER_ERR_e ADF7030_1_calibrate(void) {
         return TRANSCEIVER_ERR_ERROR;
     }
 
-    ADF7030_memoryWrite(SM_DATA_CALIBRATION_Addr, 0x20002A21)
+    reg_data.word = 0x20002A21;
+
+    ADF7030_memoryWrite(SM_DATA_CALIBRATION_Addr, reg_data.arr, 4);
 
     return TRANSCEIVER_ERR_OK;
 }
@@ -217,40 +220,44 @@ TRANSCEIVER_ERR_e ADF7030_radioSettings() {
 
     //32 bit sync, CRC len is 8
     reg_data_u.word = (reg_data_u.word & 0xC0C0FFFF) | 0x08200000;
-    ADF7030_memoryWrite(GENERIC_PKT_FRAME_CFG0_Addr, reg_data_u.word);
-    ADF7030_memoryWrite(GENERIC_PKT_SYNCWORD0_Addr, 0xF0F0F0F0);
+    ADF7030_memoryWrite(GENERIC_PKT_FRAME_CFG0_Addr, reg_data_u.arr, 4);
+    reg_data_u.word = 0xF0F0F0F0;
+    ADF7030_memoryWrite(GENERIC_PKT_SYNCWORD0_Addr, reg_data_u.arr, 4);
 
 
     ADF7030_memoryRead(GENERIC_PKT_FRAME_CFG2_Addr, reg_data_u.arr);
     //Len set to 8 bits, need to add the ENDEC_MODE, CRC_SHIFT_IN_ZEROS is set to 1
     reg_data_u.word = (reg_data_u.word & 0x00FFCFFF) | 0x01001FFF;
-    ADF7030_memoryWrite(GENERIC_PKT_FRAME_CFG2_Addr, reg_data_u.word);
+    ADF7030_memoryWrite(GENERIC_PKT_FRAME_CFG2_Addr, reg_data_u.arr, 4);
 
 
     ADF7030_memoryRead(GENERIC_PKT_FRAME_CFG1_Addr, reg_data_u.arr);
     //Enable IRQ1 when full packet has been rx or tx, no irq0, no length setting
     reg_data_u.word = (reg_data_u.word & 0x0000F000) | 0x80000080;
-    ADF7030_memoryWrite(GENERIC_PKT_FRAME_CFG1_Addr, reg_data_u.word);
+    ADF7030_memoryWrite(GENERIC_PKT_FRAME_CFG1_Addr, reg_data_u.arr, 4);
 
     //Set the CRC seed as 0xAA
-    ADF7030_memoryWrite(GENERIC_PKT_CRC_SEED_Addr, 0x000000AA);
-    
+    reg_data_u.word = 0x000000AA;
+    ADF7030_memoryWrite(GENERIC_PKT_CRC_SEED_Addr, reg_data_u.arr, 4);  
+
     //Set the CRC polynomial as 0xFF
-    ADF7030_memoryWrite(GENERIC_PKT_CRC_POLY_Addr, 0x000000FF);
+    reg_data_u.word = 0x000000FF;
+    ADF7030_memoryWrite(GENERIC_PKT_CRC_POLY_Addr, reg_data_u.arr, 4);
 
     //Final XOR of the CRC calculation
-    ADF7030_memoryWrite(GENERIC_PKT_CRC_FINAL_XOR_Addr, 0x000000FF);
+    reg_data_u.word = 0x000000FF;
+    ADF7030_memoryWrite(GENERIC_PKT_CRC_FINAL_XOR_Addr, reg_data_u.arr, 4);
 
     //TX base offset pointer: 0, RX base offset pointer: 512
     ADF7030_memoryRead(GENERIC_PKT_BUFF_CFG0_Addr, reg_data_u.arr);
     reg_data_u.word = (reg_data_u.word & 0xFE800000) | 0x00000080
-    ADF7030_memoryWrite(GENERIC_PKT_BUFF_CFG0_Addr, reg_data_u.data);
+    ADF7030_memoryWrite(GENERIC_PKT_BUFF_CFG0_Addr, reg_data_u.arr, 4);
 
 
-    ADF7030_memoryRead(GENERIC_PKT_BUFF_CFG1_Addr, reg_data_u.addr);
+    ADF7030_memoryRead(GENERIC_PKT_BUFF_CFG1_Addr, reg_data_u.arr);
     //TX_SIZE 256, RX_SIZE 256
     reg_data_u.word = (reg_data_u.word & 0x54000000) | 0x00020100;
-    ADF7030_memoryWrite(GENERIC_PKT_BUFF_CFG1_Addr, reg_data_u.word);
+    ADF7030_memoryWrite(GENERIC_PKT_BUFF_CFG1_Addr, reg_data_u.arr, 4);
 
     return TRANSCEIVER_ERR_OK;
 
@@ -317,7 +324,7 @@ TRANSCEIVER_ERR_e ADF7030_memoryWrite(uint32_t address, uint8_t *data, uint32_t 
     HAL_GPIO_Write_Pin(transceiver->cs_port, transceiver->cs_pin, GPIO_PIN_SET);
 
     return TRANSCEIVER_ERR_OK;
-    
+
 }
 
 TRANSCEIVER_ERR_e ADF7030_memoryRead(uint32_t address, uint8_t data[4]) {
