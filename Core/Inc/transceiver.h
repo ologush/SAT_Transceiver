@@ -62,6 +62,33 @@ typedef enum {
     ADF7030_READY       = 0x01
 } ADF7030_READY_STATE_e;
 
+typedef enum {
+    ADF7030_MEM_WRITE = 0x00,
+    ADF7030_MEM_READ  = 0x01
+} ADF7030_MEM_RNW_e;
+
+typedef enum {
+    ADF7030_MEM_RANDOM = 0x00,
+    ADF7030_MEM_BLOCK  = 0x01
+} ADF7030_MEM_BNR_e;
+
+typedef enum {
+    ADF7030_MEM_PTR  = 0x00,
+    ADF7030_MEM_ADDR = 0x01
+} ADF7030_MEM_ANP_e;
+
+typedef enum {
+    ADF7030_MEM_SHORT = 0x00,
+    ADF7030_MEM_LONG  = 0x01,
+} ADF7030_MEM_LNS_e;
+
+typedef enum {
+    ADF7030_MEM_PTR_SETUP = 0x00,
+    ADF7030_MEM_PTR_0     = 0x05,
+    ADF7030_MEM_PTR_1     = 0x06,
+    ADF7030_MEM_PTR_2     = 0x07
+} ADF7030_PTR_BASE_ADDR_e;
+
 TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, uint16_t cs_pin, GPIO_TypeDef *rst_port, uint16_t rst_pin, GPIO_TypeDef *miso_port, uint16_t miso_pin);
 TRANSCEIVER_ERR_e ADF7030_loadCalibration(void);
 TRANSCEIVER_ERR_e ADF7030_getTemperature(float *temp);
@@ -71,6 +98,11 @@ TRANSCEIVER_ERR_e ADF7030_transitionState(ADF7030_STATE_e target_state);
 ADF7030_STATE_e ADF7030_getState(void);
 ADF7030_TRANSITION_STATUS_e ADF7030_getTransitionStatus(void);
 ADF7030_READY_STATE_e ADF7030_getReadyState(void);
+TRANSCEIVER_ERR_e ADF7030_radioCommand();
+TRANSCEIVER_ERR_e ADF7030_memoryCommand(uint32_t address);
+
+TRANSCEIVER_ERR_e ADF7030_memoryWrite(uint32_t address, uint32_t data);
+TRANSCEIVER_ERR_e ADF7030_memoryRead(uint32_t address, uint8_t data[4]);
 
 
 

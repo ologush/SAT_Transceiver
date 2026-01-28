@@ -113,6 +113,8 @@ TRANSCEIVER_ERR_e ADF7030_1_calibrate(void) {
 
     //Write the CAL_DISABLE (0x20002A21) key to SM_DATA_CALIBRATION
 
+
+
     return TRANSCEIVER_ERR_OK;
 }
 #endif
@@ -198,4 +200,52 @@ ADF7030_READY_STATE_e ADF7030_getReadyState() {
     ADF7030_READY_STATE_e state = (status_byte >> 4) & 0x01;
 
     return state;
+}
+
+TRANSCEIVER_ERR_e ADF7030_memoryWrite(uint32_t address, uint8_t data[8]) {
+    
+    uint8_t command = 0x38;
+
+    uint8_t data_stream[9];
+    data_stream[0] = command;
+    data_stream[1] = (uint8_t) (address >> 12);
+    data_stream[2] = (uint8_t) (address >> 8) & 0xF;
+    data_stream[3] = (uint8_t) (address >> 4) & 0xF;
+    data_stream[4] = (uint8_t) (address) & 0xF;
+
+    data_stream[5] = data[0];
+    data_stream[6] = data[1];
+    data_stream[7] = data[2];
+    data_stream[8] = data[3];
+
+    SPI_tx(&transceiver, &data_stream, 9);
+
+    return TRANSCEIVER_ERR_OK;
+}
+
+TRANSCEIVER_ERR_e ADF7030_memoryRead(uint32_t address, uint8_t data[4]) {
+
+    uint8_t command = 0x78;
+
+    uint8_t data_stream[11];
+    data_stream[0] = command;
+    data_stream[1] = (uint8_t) (address >> 12);
+    data_stream[2] = (uint8_t) (address >> 8) & 0xF;
+    data_stream[3] = (uint8_t) (address >> 4) & 0xF;
+    data_stream[4] = (uint8_t) (address) & 0xF;
+    
+    data_stream[5] = 0;
+    data_stream[6] = 0;
+    data_stream[7] = 0;
+    data_stream[8] = 0;
+    data_stream[9] = 0;
+    data_stream[10] = 0;
+    data_stream[11] = 0;
+    
+    HAL_GPIO_WritePin(transceiver->cs_port, transceiver->cs_pin, GPIO_PIN_RESET);
+    HAL_SPI_Transmit(transceiver->hspi, data_stream, 7, transceiver->spi_timeout);
+    HAL_SPI_TransmitReceive(transceiver->hspi, data_stream + 7, data, 4, transceiver->spi_timeout);
+    HAL_GPIO_Write_Pin(transceiver->cs_port, transceiver->cs_pin, GPIO_PIN_SET);
+
+    return TRANSCEIVER_ERR_OK;
 }
