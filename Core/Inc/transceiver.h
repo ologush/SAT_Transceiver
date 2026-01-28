@@ -6,7 +6,7 @@
 #define RX_PACKET_MEMORY 0x2000CF0
 
 #include <stdint.h>
-
+#include "spi.h"
 
 typedef enum {
     TRANSCEIVER_ERR_ERROR,
@@ -94,7 +94,7 @@ typedef enum {
 TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, uint16_t cs_pin, GPIO_TypeDef *rst_port, uint16_t rst_pin, GPIO_TypeDef *miso_port, uint16_t miso_pin);
 TRANSCEIVER_ERR_e ADF7030_loadCalibration(void);
 TRANSCEIVER_ERR_e ADF7030_getTemperature(float *temp);
-TRANSCEIVER_ERR_e ADF7030_transmitPacket(uint8_t *packet);
+TRANSCEIVER_ERR_e ADF7030_transmitPacket(data_packet_s *packet);
 TRANSCEIVER_ERR_e ADF7030_receivePacket(uint8_t *packet);
 TRANSCEIVER_ERR_e ADF7030_transitionState(ADF7030_STATE_e target_state);
 ADF7030_STATE_e ADF7030_getState(void);
@@ -104,7 +104,7 @@ TRANSCEIVER_ERR_e ADF7030_radioCommand();
 TRANSCEIVER_ERR_e ADF7030_memoryCommand(uint32_t address);
 TRANSCEIVER_ERR_e ADF7030_getTemperature(float *temp);
 
-TRANSCEIVER_ERR_e ADF7030_memoryWrite(uint32_t address, uint8_t *data);
+TRANSCEIVER_ERR_e ADF7030_memoryWrite(uint32_t address, uint8_t *data, uint32_t nbytes);
 TRANSCEIVER_ERR_e ADF7030_memoryRead(uint32_t address, uint8_t data[4]);
 TRANSCEIVER_ERR_e ADF7030_radioSettings(void);
 

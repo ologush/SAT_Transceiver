@@ -1,18 +1,22 @@
 #include "transceiver.h"
 #include "adi_adf7030-1_reg.h"
+#include "gpio.h"
+
 
 static ADF7030_s transceiver;
-static ADF7030_MACHINE_e transceiver_state;
+static ADF7030_STATE_e transceiver_state;
 
 static TRANSCEIVER_ERR_e SPI_txrx(ADF7030_s *target, uint8_t *tx, uint8_t *rx, uint16_t size);
 static TRANSCEIVER_ERR_e SPI_tx(ADF7030_s *target, uint8_t *tx, uint16_t size);
-static TRANSCEIVER_ERR_e SPI_host_initialization(ADF7030_s *target);
+static TRANSCEIVER_ERR_e SPI_host_initialization(ADF7030_s *target, uint32_t timeout_ms);
 
 static TRANSCEIVER_ERR_e SPI_txrx(ADF7030_s *target, uint8_t *tx, uint8_t *rx, uint16_t size) {
 
     HAL_GPIO_WritePin(target->cs_port, target->cs_pin, GPIO_PIN_RESET);
     HAL_SPI_TransmitReceive(target->hspi, tx, rx, size, target->spi_timeout);
-    HAL_GPIO_Write_Pin(target->cs_port, target->cs_pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(target->cs_port, target->cs_pin, GPIO_PIN_SET);
+
+    return TRANSCEIVER_ERR_OK;
 
 }
 
@@ -20,8 +24,9 @@ static TRANSCEIVER_ERR_e SPI_tx(ADF7030_s *target, uint8_t *tx, uint16_t size) {
 
     HAL_GPIO_WritePin(target->cs_port, target->cs_pin, GPIO_PIN_RESET);
     HAL_SPI_Transmit(target->hspi, tx, size, target->spi_timeout);
-    HAL_GPIO_Write_Pin(target->cs_port, target->cs_pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(target->cs_port, target->cs_pin, GPIO_PIN_SET);
 
+    return TRANSCEIVER_ERR_OK;
 }
 
 static TRANSCEIVER_ERR_e SPI_host_initialization(ADF7030_s *target, uint32_t timeout_ms) {
@@ -40,7 +45,7 @@ static TRANSCEIVER_ERR_e SPI_host_initialization(ADF7030_s *target, uint32_t tim
 
 }
 
-TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, uint16_t cs_pin, GPIO_TypeDef *rst_port, uint16_t rst_pin, GPIO_HandleTypeDef miso_port, uint16_t miso_pin) {
+TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, uint16_t cs_pin, GPIO_TypeDef *rst_port, uint16_t rst_pin, GPIO_TypeDef *miso_port, uint16_t miso_pin) {
 
     transceiver.hspi = hspi;
     transceiver.cs_port = cs_port;
@@ -111,7 +116,7 @@ TRANSCEIVER_ERR_e ADF7030_1_calibrate(void) {
     union {
         uint8_t arr[4];
         uint32_t word;
-    } reg_data {.word = 0};
+    } reg_data;
 
     reg_data.word = 0x20002971;
 
@@ -150,8 +155,6 @@ TRANSCEIVER_ERR_e ADF7030_1_calibrate(void) {
 
 TRANSCEIVER_ERR_e ADF7030_1_loadCalibration(void) {
 
-    uint8_t calibrationSettings[] = {};
-
     //Command the ADF7030-1 into the PHY_OFF state
     
     //Load the configuration settings into the ADF7030-1 
@@ -171,7 +174,7 @@ TRANSCEIVER_ERR_e ADF7030_getTemperature(float *temp) {
         uint8_t arr[4];
         uint32_t u_word;
         int32_t word;
-    } temp_data {.word = 0};
+    } temp_data;
 
     ADF7030_memoryRead(PROFILE_MONITOR1_Addr, temp_data.arr);
 
@@ -197,10 +200,10 @@ TRANSCEIVER_ERR_e ADF7030_transmitPacket(data_packet_s *packet) {
 
     uint8_t command = 0x38;
 
-    HAL_GPIO_WritePin(transceiver->cs_port, transceiver->cs_pin, GPIO_PIN_RESET);
-    HAL_SPI_Transmit(transceiver->hspi, command, 1, transceiver->spi_timeout);
-    HAL_SPI_Transmit(transceiver->hspi, tx_data.arr, 130, transceiver->spi_timeout);
-    HAL_GPIO_Write_Pin(transceiver->cs_port, transceiver->cs_pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(transceiver.cs_port, transceiver.cs_pin, GPIO_PIN_RESET);
+    HAL_SPI_Transmit(transceiver.hspi, &command, 1, transceiver.spi_timeout);
+    HAL_SPI_Transmit(transceiver.hspi, tx_data.arr, 130, transceiver.spi_timeout);
+    HAL_GPIO_WritePin(transceiver.cs_port, transceiver.cs_pin, GPIO_PIN_SET);
 
     ADF7030_transitionState(ADF7030_PHY_TX);
 
@@ -214,7 +217,7 @@ TRANSCEIVER_ERR_e ADF7030_radioSettings() {
     union {
         uint8_t arr[4];
         uint32_t word;
-    } reg_data_u {.word = 0};
+    } reg_data_u;
 
     ADF7030_memoryRead(GENERIC_PKT_FRAME_CFG0_Addr, reg_data_u.arr);
 
@@ -250,7 +253,7 @@ TRANSCEIVER_ERR_e ADF7030_radioSettings() {
 
     //TX base offset pointer: 0, RX base offset pointer: 512
     ADF7030_memoryRead(GENERIC_PKT_BUFF_CFG0_Addr, reg_data_u.arr);
-    reg_data_u.word = (reg_data_u.word & 0xFE800000) | 0x00000080
+    reg_data_u.word = (reg_data_u.word & 0xFE800000) | 0x00000080;
     ADF7030_memoryWrite(GENERIC_PKT_BUFF_CFG0_Addr, reg_data_u.arr, 4);
 
 
@@ -275,7 +278,7 @@ TRANSCEIVER_ERR_e ADF7030_1_receivePacket(uint8_t *packet) {
     return TRANSCEIVER_ERR_OK;
 }
 
-TRANSCEIVER_ERR_e ADF7030_transitionState(ADF7030_STATE_MACHINE_e target_state) {
+TRANSCEIVER_ERR_e ADF7030_transitionState(ADF7030_STATE_e target_state) {
 
     uint8_t command = (1 << 7) | target_state;
     SPI_tx(&transceiver, &command, 1);
@@ -315,13 +318,15 @@ TRANSCEIVER_ERR_e ADF7030_memoryWrite(uint32_t address, uint8_t *data, uint32_t 
     union {
         uint32_t word;
         uint8_t arr[4];
-    } addr {.word = address};
+    } addr;
 
-    HAL_GPIO_WritePin(transceiver->cs_port, transceiver->cs_pin, GPIO_PIN_RESET);
-    HAL_SPI_Transmit(transceiver->hspi, command, 1, transceiver->spi_timeout);
-    HAL_SPI_Transmit(transceiver->hspi, addr.arr, 4, transceiver->spi_timeout);
-    HAL_SPI_Transmit(transceiver->hspi, data, nbytes, transceiver->spi_timeout);
-    HAL_GPIO_Write_Pin(transceiver->cs_port, transceiver->cs_pin, GPIO_PIN_SET);
+    addr.word = address;
+
+    HAL_GPIO_WritePin(transceiver.cs_port, transceiver.cs_pin, GPIO_PIN_RESET);
+    HAL_SPI_Transmit(transceiver.hspi, &command, 1, transceiver.spi_timeout);
+    HAL_SPI_Transmit(transceiver.hspi, addr.arr, 4, transceiver.spi_timeout);
+    HAL_SPI_Transmit(transceiver.hspi, data, nbytes, transceiver.spi_timeout);
+    HAL_GPIO_WritePin(transceiver.cs_port, transceiver.cs_pin, GPIO_PIN_SET);
 
     return TRANSCEIVER_ERR_OK;
 
@@ -346,10 +351,10 @@ TRANSCEIVER_ERR_e ADF7030_memoryRead(uint32_t address, uint8_t data[4]) {
     data_stream[10] = 0;
     data_stream[11] = 0;
     
-    HAL_GPIO_WritePin(transceiver->cs_port, transceiver->cs_pin, GPIO_PIN_RESET);
-    HAL_SPI_Transmit(transceiver->hspi, data_stream, 7, transceiver->spi_timeout);
-    HAL_SPI_TransmitReceive(transceiver->hspi, data_stream + 7, data, 4, transceiver->spi_timeout);
-    HAL_GPIO_Write_Pin(transceiver->cs_port, transceiver->cs_pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(transceiver.cs_port, transceiver.cs_pin, GPIO_PIN_RESET);
+    HAL_SPI_Transmit(transceiver.hspi, data_stream, 7, transceiver.spi_timeout);
+    HAL_SPI_TransmitReceive(transceiver.hspi, data_stream + 7, data, 4, transceiver.spi_timeout);
+    HAL_GPIO_WritePin(transceiver.cs_port, transceiver.cs_pin, GPIO_PIN_SET);
 
     return TRANSCEIVER_ERR_OK;
 }

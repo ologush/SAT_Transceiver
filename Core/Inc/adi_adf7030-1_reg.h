@@ -41,10 +41,10 @@ OF THE POSSIBILITY OF SUCH DAMAGE.
 //#define __INTERNAL_DEV__
 #ifndef __INTERNAL_DEV__
 
-#include <adf7030-1/__public__ADF7030_1_hw_cdef.h>
-#include <adf7030-1/__public__ADF7030_1_fw_cdef.h>
-#include <adf7030-1/__public__ADF7030_1_hw_macro.h>
-#include <adf7030-1/__public__ADF7030_1_fw_macro.h>
+#include <__public__ADF7030_1_hw_cdef.h>
+#include <__public__ADF7030_1_fw_cdef.h>
+#include <__public__ADF7030_1_hw_macro.h>
+#include <__public__ADF7030_1_fw_macro.h>
 
 #else
 
