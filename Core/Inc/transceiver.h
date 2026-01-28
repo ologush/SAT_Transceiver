@@ -100,6 +100,7 @@ ADF7030_TRANSITION_STATUS_e ADF7030_getTransitionStatus(void);
 ADF7030_READY_STATE_e ADF7030_getReadyState(void);
 TRANSCEIVER_ERR_e ADF7030_radioCommand();
 TRANSCEIVER_ERR_e ADF7030_memoryCommand(uint32_t address);
+TRANSCEIVER_ERR_e ADF7030_getTemperature(float *temp);
 
 TRANSCEIVER_ERR_e ADF7030_memoryWrite(uint32_t address, uint32_t data);
 TRANSCEIVER_ERR_e ADF7030_memoryRead(uint32_t address, uint8_t data[4]);

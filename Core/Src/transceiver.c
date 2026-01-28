@@ -114,8 +114,6 @@ TRANSCEIVER_ERR_e ADF7030_1_calibrate(void) {
 
     ADF7030_transitionState(ADF7030_CFG_DEV);
     
-    //wait until it returns to PHY_OFF
-
     while(ADF7030_getTransitionStatus() != ADF7030_IDLE_IN_STATE);
 
     if(ADF7030_getState() != ADF7030_PHY_OFF) {
@@ -135,7 +133,7 @@ TRANSCEIVER_ERR_e ADF7030_1_calibrate(void) {
         uint32_t word;
     } reg_data {.word = 0};
 
-    ADF7030_memoryRead(PROFILE_RADIO_CAL_CFG1_Addr, reg_data);
+    ADF7030_memoryRead(PROFILE_RADIO_CAL_CFG1_Addr, reg_data.arr);
 
     if(ADF7030_getState() != ADF7030_PHY_ON || (reg_data.word & 0x20000000) != 0x20000000) {
         return TRANSCEIVER_ERR_ERROR;
@@ -162,18 +160,25 @@ TRANSCEIVER_ERR_e ADF7030_1_loadCalibration(void) {
     return TRANSCEIVER_ERR_OK;
 }
 
-TRANSCEIVER_ERR_e ADF7030_1_getTemperature(float *temp) {
+TRANSCEIVER_ERR_e ADF7030_getTemperature(float *temp) {
 
-    //Host must enter the monitoring state
+    ADF7030_transitionState(ADF7030_MON);
 
-    //Retreive the TEMP_OUTPUT bits in the PROFILE_MONITOR1 register
+    union {
+        uint8_t arr[4];
+        uint32_t u_word;
+        int32_t word;
+    } temp_data {.word = 0};
 
-    //Obtain the twos compliment of TEMP_OUTPUT
+    ADF7030_memoryRead(PROFILE_MONITOR1_Addr, temp_data.arr);
 
-    //Multiply the TEMP_OUTPUT bits by .0625 deg C
+    temp_data.word = temp_data.u_word & 0x00000FFF;
 
-    //The state machine returns to the PHY_ON state
+    if(temp_data.u_word > 0x800) {
+        temp_data.word = (int32_t) temp_data.u_word - 0x1000;
+    }
 
+    *temp = 0.0625f * (float) temp_data.word;
 
     return TRANSCEIVER_ERR_OK;
 }
