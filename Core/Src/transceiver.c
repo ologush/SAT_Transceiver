@@ -185,24 +185,23 @@ TRANSCEIVER_ERR_e ADF7030_getTemperature(float *temp) {
 
 TRANSCEIVER_ERR_e ADF7030_transmitPacket(data_packet_s *packet) {
 
-    //Host writes payload data into the ADF7030-1 TX payload buffer and configures programmable fields in the generic packet memory
-    //The ADF7030-1 transmits a packet in response to a CMD_PHY_TX command
-
     union {
-        uint8_t arr[4];
-        uint32_t word;
-    } reg_data_u {.word = 0};
+        data_packet_s packet;
+        uint8_t arr[130];
+    } tx_data;
 
+    tx_data.packet = *packet;
 
+    uint8_t command = 0x38;
 
-    //Default preamble of 0x55
-    //Set SYNC0 len in the GENERIC_PKT_FRAME_CFG0 register
-    //Set the SYNC0 value in the GENERIC_PKT_SYNCWORD0 register
+    HAL_GPIO_WritePin(transceiver->cs_port, transceiver->cs_pin, GPIO_PIN_RESET);
+    HAL_SPI_Transmit(transceiver->hspi, command, 1, transceiver->spi_timeout);
+    HAL_SPI_Transmit(transceiver->hspi, tx_data.arr, 130, transceiver->spi_timeout);
+    HAL_GPIO_Write_Pin(transceiver->cs_port, transceiver->cs_pin, GPIO_PIN_SET);
 
-    ADF7030_memoryRead(GENERIC_PKT_FRAME_CFG2_Addr, reg_data_u.arr);
+    ADF7030_transitionState(ADF7030_PHY_TX);
 
-    //Set LEN fied in the 
-
+    //Add some error handling
 
     return TRANSCEIVER_ERR_OK;
 }
