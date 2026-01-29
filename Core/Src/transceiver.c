@@ -52,6 +52,8 @@ TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, u
     transceiver.cs_pin = cs_pin;
     transceiver.rst_port = rst_port;
     transceiver.rst_pin = rst_pin;
+    transceiver.miso_port = miso_port;
+    transceiver.miso_pin = miso_pin;
 
     transceiver_state = ADF7030_PHY_OFF;
 
@@ -62,6 +64,8 @@ TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, u
 #ifdef LOAD_CONFIG
     ADF7030_1_loadConfig();
 #endif
+
+    return TRANSCEIVER_ERR_OK;
 
 }
 
@@ -176,7 +180,7 @@ TRANSCEIVER_ERR_e ADF7030_getTemperature(float *temp) {
         int32_t word;
     } temp_data;
 
-    ADF7030_memoryRead(PROFILE_MONITOR1_Addr, temp_data.arr);
+    ADF7030_memoryRead(PROFILE_MONITOR1_Addr, temp_data.arr, 4);
 
     temp_data.word = temp_data.u_word & 0x00000FFF;
 
@@ -219,7 +223,7 @@ TRANSCEIVER_ERR_e ADF7030_radioSettings() {
         uint32_t word;
     } reg_data_u;
 
-    ADF7030_memoryRead(GENERIC_PKT_FRAME_CFG0_Addr, reg_data_u.arr);
+    ADF7030_memoryRead(GENERIC_PKT_FRAME_CFG0_Addr, reg_data_u.arr, 4);
 
     //32 bit sync, CRC len is 8
     reg_data_u.word = (reg_data_u.word & 0xC0C0FFFF) | 0x08200000;
@@ -228,13 +232,13 @@ TRANSCEIVER_ERR_e ADF7030_radioSettings() {
     ADF7030_memoryWrite(GENERIC_PKT_SYNCWORD0_Addr, reg_data_u.arr, 4);
 
 
-    ADF7030_memoryRead(GENERIC_PKT_FRAME_CFG2_Addr, reg_data_u.arr);
+    ADF7030_memoryRead(GENERIC_PKT_FRAME_CFG2_Addr, reg_data_u.arr, 4);
     //Len set to 8 bits, need to add the ENDEC_MODE, CRC_SHIFT_IN_ZEROS is set to 1
     reg_data_u.word = (reg_data_u.word & 0x00FFCFFF) | 0x01001FFF;
     ADF7030_memoryWrite(GENERIC_PKT_FRAME_CFG2_Addr, reg_data_u.arr, 4);
 
 
-    ADF7030_memoryRead(GENERIC_PKT_FRAME_CFG1_Addr, reg_data_u.arr);
+    ADF7030_memoryRead(GENERIC_PKT_FRAME_CFG1_Addr, reg_data_u.arr, 4);
     //Enable IRQ1 when full packet has been rx or tx, no irq0, no length setting
     reg_data_u.word = (reg_data_u.word & 0x0000F000) | 0x80000080;
     ADF7030_memoryWrite(GENERIC_PKT_FRAME_CFG1_Addr, reg_data_u.arr, 4);
@@ -252,12 +256,12 @@ TRANSCEIVER_ERR_e ADF7030_radioSettings() {
     ADF7030_memoryWrite(GENERIC_PKT_CRC_FINAL_XOR_Addr, reg_data_u.arr, 4);
 
     //TX base offset pointer: 0, RX base offset pointer: 512
-    ADF7030_memoryRead(GENERIC_PKT_BUFF_CFG0_Addr, reg_data_u.arr);
+    ADF7030_memoryRead(GENERIC_PKT_BUFF_CFG0_Addr, reg_data_u.arr, 4);
     reg_data_u.word = (reg_data_u.word & 0xFE800000) | 0x00000080;
     ADF7030_memoryWrite(GENERIC_PKT_BUFF_CFG0_Addr, reg_data_u.arr, 4);
 
 
-    ADF7030_memoryRead(GENERIC_PKT_BUFF_CFG1_Addr, reg_data_u.arr);
+    ADF7030_memoryRead(GENERIC_PKT_BUFF_CFG1_Addr, reg_data_u.arr, 4);
     //TX_SIZE 256, RX_SIZE 256
     reg_data_u.word = (reg_data_u.word & 0x54000000) | 0x00020100;
     ADF7030_memoryWrite(GENERIC_PKT_BUFF_CFG1_Addr, reg_data_u.arr, 4);
@@ -283,6 +287,8 @@ TRANSCEIVER_ERR_e ADF7030_transitionState(ADF7030_STATE_e target_state) {
     uint8_t command = (1 << 7) | target_state;
     SPI_tx(&transceiver, &command, 1);
 
+    return TRANSCEIVER_ERR_OK;
+
 }
 
 ADF7030_STATE_e ADF7030_getState() {
@@ -295,7 +301,7 @@ ADF7030_TRANSITION_STATUS_e ADF7030_getTransitionStatus() {
     uint8_t status_byte = 0;
     SPI_txrx(&transceiver, &command, &status_byte, 1);
 
-    ADF7030_TRANSITION_STATUS_e status = (status >> 1) & 0x03;
+    ADF7030_TRANSITION_STATUS_e status = (status_byte >> 1) & 0x03;
 
     return status;
 }
@@ -332,29 +338,23 @@ TRANSCEIVER_ERR_e ADF7030_memoryWrite(uint32_t address, uint8_t *data, uint32_t 
 
 }
 
-TRANSCEIVER_ERR_e ADF7030_memoryRead(uint32_t address, uint8_t data[4]) {
+TRANSCEIVER_ERR_e ADF7030_memoryRead(uint32_t address, uint8_t *data, uint32_t nbytes) {
 
     uint8_t command = 0x78;
 
-    uint8_t data_stream[11];
-    data_stream[0] = command;
-    data_stream[1] = (uint8_t) (address >> 12);
-    data_stream[2] = (uint8_t) (address >> 8) & 0xF;
-    data_stream[3] = (uint8_t) (address >> 4) & 0xF;
-    data_stream[4] = (uint8_t) (address) & 0xF;
-    
-    data_stream[5] = 0;
-    data_stream[6] = 0;
-    data_stream[7] = 0;
-    data_stream[8] = 0;
-    data_stream[9] = 0;
-    data_stream[10] = 0;
-    data_stream[11] = 0;
+    union {
+        uint32_t word;
+        uint8_t arr[4];
+    } addr;
+
+    addr.word = address;
     
     HAL_GPIO_WritePin(transceiver.cs_port, transceiver.cs_pin, GPIO_PIN_RESET);
-    HAL_SPI_Transmit(transceiver.hspi, data_stream, 7, transceiver.spi_timeout);
-    HAL_SPI_TransmitReceive(transceiver.hspi, data_stream + 7, data, 4, transceiver.spi_timeout);
+    HAL_SPI_Transmit(transceiver.hspi, &command, 1, transceiver.spi_timeout);
+    HAL_SPI_Transmit(transceiver.hspi, addr.arr, 6, transceiver.spi_timeout); //Adding the extra two bytes to transmit nonsense so that we can start receiving the data on the TransmitReceive call
+    HAL_SPI_Receive(transceiver.hspi, data, nbytes, transceiver.spi_timeout);
     HAL_GPIO_WritePin(transceiver.cs_port, transceiver.cs_pin, GPIO_PIN_SET);
 
     return TRANSCEIVER_ERR_OK;
+
 }
