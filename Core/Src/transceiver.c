@@ -65,6 +65,18 @@ TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, u
     ADF7030_1_loadConfig();
 #endif
 
+    // Set GPIO 4 as an output interrupt
+
+    union {
+        uint32_t word;
+        uint8_t arr[4];
+    } data;
+
+    //IRQ_OUT0
+    data.word = 0x00000006;
+
+    ADF7030_memoryWrite(PROFILE_GPCON4_7_Addr, data.arr, 4);
+
     return TRANSCEIVER_ERR_OK;
 
 }
@@ -168,7 +180,7 @@ const uint32_t cal_len = sizeof(Calibration);
 TRANSCEIVER_ERR_e ADF7030_1_loadCalibration(void) {
 
     ADF7030_transmitionState(ADF7030_PHY_OFF);
-    
+
     //May need to change how this is written depending on how it is stored
     for(uint8_t i = 0; i < cal_len / 2; i++) {
         union {
@@ -286,7 +298,7 @@ TRANSCEIVER_ERR_e ADF7030_radioSettings() {
 
 }
 
-TRANSCEIVER_ERR_e ADF7030_1_receivePacket(uint8_t *packet) {
+TRANSCEIVER_ERR_e ADF7030_receivePacket(data_packet_s *packet) {
 
     //In preparation for receiving a packet, the host configures programmable fields in the generic packet memory region and issues a CMD_PHY_RX command.
     //The ADF7030-1 then enters the receive state, PHY_RX
