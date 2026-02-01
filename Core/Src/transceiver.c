@@ -157,18 +157,34 @@ TRANSCEIVER_ERR_e ADF7030_1_calibrate(void) {
 }
 #endif
 
+#ifdef LOAD_CALIBRATION
+
+const uint32_t Calibration[] = {
+    #include "Calibration.cfg"
+}
+
+const uint32_t cal_len = sizeof(Calibration);
+
 TRANSCEIVER_ERR_e ADF7030_1_loadCalibration(void) {
 
-    //Command the ADF7030-1 into the PHY_OFF state
+    ADF7030_transmitionState(ADF7030_PHY_OFF);
     
-    //Load the configuration settings into the ADF7030-1 
+    //May need to change how this is written depending on how it is stored
+    for(uint8_t i = 0; i < cal_len / 2; i++) {
+        union {
+            uint32_t word;
+            uint8_t arr[4];
+        } reg_data;
 
-    //Write the saved calibration results into the calibrations results registers 
+        reg_data.word = Calibration[i + 1];
+        ADF7030_memoryWrite(Calibration[i], reg_data.arr, 4);
+    }
 
-    //Issue a CMD_CFG_DEV command
+    ADF7030_transitionState(ADF7030_CFG_DEV);
 
     return TRANSCEIVER_ERR_OK;
 }
+#endif
 
 TRANSCEIVER_ERR_e ADF7030_getTemperature(float *temp) {
 
