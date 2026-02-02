@@ -95,7 +95,7 @@ TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, u
 TRANSCEIVER_ERR_e ADF7030_loadCalibration(void);
 TRANSCEIVER_ERR_e ADF7030_getTemperature(float *temp);
 TRANSCEIVER_ERR_e ADF7030_transmitPacket(data_packet_s *packet);
-TRANSCEIVER_ERR_e ADF7030_receivePacket(uint8_t *packet);
+TRANSCEIVER_ERR_e ADF7030_receivePacket(data_packet_s *packet);
 TRANSCEIVER_ERR_e ADF7030_transitionState(ADF7030_STATE_e target_state);
 ADF7030_STATE_e ADF7030_getState(void);
 ADF7030_TRANSITION_STATUS_e ADF7030_getTransitionStatus(void);

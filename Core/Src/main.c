@@ -49,7 +49,7 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+data_packet_s receivedPacket;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -233,6 +233,12 @@ void vADCSCommandTask(void * pvParameters) {
   }
 
   vTaskDelete(NULL);
+}
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+  if(GPIO_Pin == GPIO_PIN_1) {
+    ADF7030_receivePacket(&receivedPacket);
+  }
 }
 
 /* USER CODE END 4 */
