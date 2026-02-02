@@ -290,8 +290,8 @@ TRANSCEIVER_ERR_e ADF7030_radioSettings() {
 
 
     ADF7030_memoryRead(GENERIC_PKT_BUFF_CFG1_Addr, reg_data_u.arr, 4);
-    //TX_SIZE 256, RX_SIZE 256
-    reg_data_u.word = (reg_data_u.word & 0x54000000) | 0x00020100;
+    //TX_SIZE 256, RX_SIZE 256, autoturnaround TX to RX
+    reg_data_u.word = (reg_data_u.word & 0x54000000) | 0xD0020100;
     ADF7030_memoryWrite(GENERIC_PKT_BUFF_CFG1_Addr, reg_data_u.arr, 4);
 
     return TRANSCEIVER_ERR_OK;
@@ -300,12 +300,23 @@ TRANSCEIVER_ERR_e ADF7030_radioSettings() {
 
 TRANSCEIVER_ERR_e ADF7030_receivePacket(data_packet_s *packet) {
 
-    //In preparation for receiving a packet, the host configures programmable fields in the generic packet memory region and issues a CMD_PHY_RX command.
-    //The ADF7030-1 then enters the receive state, PHY_RX
-    //If a preamble is detected, the preamble interrupt is set
-    //If the preamble then stops being received, the preamble gone interrupt is set.
-    //If subsequently the sync word specified in the packet configuration is detected, the ADF7030-1 proceeds to receive the payload and saves the payload of the packet in the RX payload buffer
-    
+    union {
+        data_packet_s *rx_packet;
+        uint8_t arr[130];
+    } rx_data;
+
+    rx_data.rx_packet = packet;
+    ADF7030_memoryRead(RX_PACKET_MEMORY, rx_data.arr, 130);
+
+    union {
+        uint8_t arr[4];
+        uint32_t word;
+    } reg_data_u;
+
+    // Clear the IRQ0 flag for packet received
+    ADF7030_memoryRead(IRQ_CTRL_STATUS0_Addr, reg_data_u.arr, 4);
+    reg_data_u.word = reg_data_u.word | 0x00000080;
+    ADF7030_memoryWrite(IRQ_CTRL_STATUS0_Addr, reg_data_u.arr, 4);
 
     return TRANSCEIVER_ERR_OK;
 }
