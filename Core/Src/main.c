@@ -24,7 +24,6 @@
 #include "usart.h"
 #include "usb_device.h"
 #include "gpio.h"
-#include "transceiver.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -38,7 +37,11 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define VOLTAGE_REF     3.3f
+#define ADC_RESOLUTION  4095.0f
+#define V_OFFSET        0.4f
+#define TEMP_COEFF      0.0195f
+#define T_INFLECTION    0.0f
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -50,6 +53,10 @@
 
 /* USER CODE BEGIN PV */
 data_packet_s receivedPacket;
+static uint8_t ADC_tracker = 0;
+
+QueueHandle_t temperatureQueue;
+QueueHandle_t potentiometerQueue;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -75,10 +82,12 @@ int main(void)
   BaseType_t xTransmitTaskReturned;
   BaseType_t xReceiveTaskReturned;
   BaseType_t xADCSCommandTaskReturned;
+  BaseType_t xSensorTaskReturned;
 
   TaskHandle_t xTransmitHandle = NULL;
   TaskHandle_t xReceiveHandle = NULL;
   TaskHandle_t xADCSCommandHandle = NULL;
+  TaskHandle_t xSensorHandle = NULL;
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -112,6 +121,14 @@ int main(void)
                               3,
                               &xADCSCommandHandle);
   
+  xSensorTaskReturned = xTaskCreate(
+                              vSensorTask,
+                              "Sensor",
+                              SENSOR_STACK_SIZE,
+                              NULL,
+                              4,
+                              &xSensorHandle);
+  
     
   /* USER CODE END Init */
 
@@ -128,7 +145,10 @@ int main(void)
   MX_USART1_Init();
   MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
-
+  HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
+  HAL_ADC_Start(&hadc1);
+  temperatureQueue = xQueueCreate(10, sizeof(float));
+  potentiometerQueue = xQueueCreate(10, sizeof(float));
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -192,10 +212,8 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USB|RCC_PERIPHCLK_USART1
-                              |RCC_PERIPHCLK_ADC12;
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USB|RCC_PERIPHCLK_USART1;
   PeriphClkInit.Usart1ClockSelection = RCC_USART1CLKSOURCE_PCLK2;
-  PeriphClkInit.Adc12ClockSelection = RCC_ADC12PLLCLK_DIV1;
   PeriphClkInit.USBClockSelection = RCC_USBCLKSOURCE_PLL_DIV1_5;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
@@ -230,6 +248,27 @@ void vADCSCommandTask(void * pvParameters) {
 
   for(;;) {
 
+  }
+
+  vTaskDelete(NULL);
+}
+
+void vSensorTask(void * pvParameters) {
+
+  for(;;) {
+    HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
+    uint32_t adc_value = HAL_ADC_GetValue(&hadc1);
+
+    if(ADC_tracker == 0) {
+      float temperature = (float)adc_value * (VOLTAGE_REF / ADC_RESOLUTION);
+      temperature = (temperature - V_OFFSET) / TEMP_COEFF + T_INFLECTION;
+      xQueueSendToBack(temperatureQueue, &temperature, 0);
+      ADC_tracker++;
+    } else {
+      float potentiometer = (float)adc_value * (VOLTAGE_REF / ADC_RESOLUTION);
+      xQueueSendToBack(potentiometerQueue, &potentiometer, 0);
+      ADC_tracker = 0;
+    }
   }
 
   vTaskDelete(NULL);
