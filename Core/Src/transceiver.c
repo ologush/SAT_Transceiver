@@ -72,11 +72,13 @@ TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, u
         uint8_t arr[4];
     } data;
 
-    //IRQ_OUT0
+    //Set GPIO 4 to IRQ0 output
     data.word = 0x00000006;
-
     ADF7030_memoryWrite(PROFILE_GPCON4_7_Addr, data.arr, 4);
 
+    //Set GPIO 1 to output to set the RF switch
+    data.word = 0x00001900;
+    ADF7030_memoryWrite(PROFILE_GPCON0_3_Addr, data.arr, 4);
     return TRANSCEIVER_ERR_OK;
 
 }
