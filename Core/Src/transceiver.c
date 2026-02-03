@@ -226,6 +226,15 @@ TRANSCEIVER_ERR_e ADF7030_getTemperature(float *temp) {
 TRANSCEIVER_ERR_e ADF7030_transmitPacket(data_packet_s *packet) {
 
     union {
+        uint32_t word;
+        uint8_t arr[4];
+    } reg_data;
+    reg_data.word = 0x00000002;
+
+    // Set GPIO 1 low to put the RF switch in TX mode
+    ADF7030_memoryWrite(0x40000820UL, reg_data.arr, 4);
+
+    union {
         data_packet_s packet;
         uint8_t arr[130];
     } tx_data;
@@ -241,7 +250,10 @@ TRANSCEIVER_ERR_e ADF7030_transmitPacket(data_packet_s *packet) {
 
     ADF7030_transitionState(ADF7030_PHY_TX);
 
-    //Add some error handling
+    // Switch the RF switch back to RX mode
+
+    reg_data.word = 0x00000002;
+    ADF7030_memoryWrite(0x4000081CUL, reg_data.arr, 4);
 
     return TRANSCEIVER_ERR_OK;
 }
