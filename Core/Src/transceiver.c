@@ -35,8 +35,8 @@ static TRANSCEIVER_ERR_e SPI_host_initialization(ADF7030_s *target, uint32_t tim
     uint32_t start = HAL_GetTick();
 
     while (HAL_GPIO_ReadPin(target->miso_port, target->miso_pin) == GPIO_PIN_RESET) {
-
-        if ((HAL_GetTick() - start) > timeout_ms) {
+        uint32_t current = HAL_GetTick();
+        if ((current - start) > timeout_ms) {
             return TRANSCEIVER_ERR_ERROR;
         }
     }

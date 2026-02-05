@@ -147,6 +147,12 @@ int main(void)
   MX_USART1_Init();
   MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
+
+  // Turn on XCVR power
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, GPIO_PIN_SET);
+  ADF7030_init(&hspi1, GPIOB, GPIO_PIN_0, GPIOC, GPIO_PIN_15, GPIOA, GPIO_PIN_6);
+
+
   HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
   HAL_ADC_Start(&hadc1);
   temperatureQueue = xQueueCreate(10, sizeof(float));
@@ -286,7 +292,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 
 /**
   * @brief  Period elapsed callback in non blocking mode
-  * @note   This function is called  when TIM1 interrupt took place, inside
+  * @note   This function is called  when TIM6 interrupt took place, inside
   * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
   * a global variable "uwTick" used as application time base.
   * @param  htim : TIM handle
@@ -297,7 +303,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   /* USER CODE BEGIN Callback 0 */
 
   /* USER CODE END Callback 0 */
-  if (htim->Instance == TIM1) {
+  if (htim->Instance == TIM6) {
     HAL_IncTick();
   }
   /* USER CODE BEGIN Callback 1 */
