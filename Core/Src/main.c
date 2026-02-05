@@ -150,6 +150,7 @@ int main(void)
 
   // Turn on XCVR power
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, GPIO_PIN_SET);
+
   ADF7030_init(&hspi1, GPIOB, GPIO_PIN_0, GPIOC, GPIO_PIN_15, GPIOA, GPIO_PIN_6);
 
 

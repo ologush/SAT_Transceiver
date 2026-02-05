@@ -42,7 +42,7 @@ static TRANSCEIVER_ERR_e SPI_host_initialization(ADF7030_s *target, uint32_t tim
     }
 
     HAL_GPIO_WritePin(target->cs_port, target->cs_pin, GPIO_PIN_SET);
-
+    return TRANSCEIVER_ERR_OK;
 }
 
 TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, uint16_t cs_pin, GPIO_TypeDef *rst_port, uint16_t rst_pin, GPIO_TypeDef *miso_port, uint16_t miso_pin) {
@@ -56,6 +56,11 @@ TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, u
     transceiver.miso_pin = miso_pin;
 
     transceiver_state = ADF7030_PHY_OFF;
+
+    HAL_GPIO_WritePin(transceiver.rst_port, transceiver.rst_pin, GPIO_PIN_RESET);
+    HAL_Delay(10);
+    HAL_GPIO_WritePin(transceiver.rst_port, transceiver.rst_pin, GPIO_PIN_SET);
+    HAL_Delay(10);
 
     if(SPI_host_initialization(&transceiver, 50) == TRANSCEIVER_ERR_ERROR) {
         return TRANSCEIVER_ERR_ERROR;
