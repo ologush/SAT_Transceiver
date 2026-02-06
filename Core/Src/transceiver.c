@@ -2,33 +2,33 @@
 #include "adi_adf7030-1_reg.h"
 #include "gpio.h"
 
-
-
 static ADF7030_s transceiver;
 static ADF7030_STATE_e transceiver_state;
 
 static TRANSCEIVER_ERR_e SPI_txrx(ADF7030_s *target, uint8_t *tx, uint8_t *rx, uint16_t size);
 static TRANSCEIVER_ERR_e SPI_tx(ADF7030_s *target, uint8_t *tx, uint16_t size);
 static TRANSCEIVER_ERR_e SPI_host_initialization(ADF7030_s *target, uint32_t timeout_ms);
-static uint32_t ADF7030_alignWord(uint32_t address);
 static TRANSCEIVER_ERR_e ADF7030_alignMultipleWords(uint8_t *data, uint32_t nwords, uint8_t *aligned_data);
 
+static uint32_t ADF7030_alignWord(uint32_t address);
+
 #ifdef LOAD_CONFIG
-static TRANSCEIVER_ERR_e ADF7030_loadConfig(uint8_t config[], uint32_t len);
 static const uint8_t Radio_Memory_Configuration[] = {
     #include "Configuration.cfg"
 };
 #endif
 
 #ifdef CALIBRATE
-static TRANSCEIVER_ERR_e ADF7030_loadConfig(uint8_t config[], uint32_t len);
 static TRANSCEIVER_ERR_e ADF7030_calibrate(void);
 static TRANSCEIVER_ERR_e ADF7030_retreiveCalibrationData(uint32_t *cal_data);
 const uint8_t Calibration[] = {
     #include "OffLineCalibrations.cfg"
 };
-
 const uint32_t cal_len = sizeof(Calibration);
+#endif
+
+#if defined(LOAD_CONFIG) || defined(CALIBRATE)
+static TRANSCEIVER_ERR_e ADF7030_loadConfig(const uint8_t config[], uint32_t len);
 #endif
 
 static TRANSCEIVER_ERR_e SPI_txrx(ADF7030_s *target, uint8_t *tx, uint8_t *rx, uint16_t size) {
@@ -94,11 +94,6 @@ TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, u
     union {
         uint32_t word;
         uint8_t arr[4];
-    } GENERIC_PKT_FRAME_CFG2_data;
-
-    union {
-        uint32_t word;
-        uint8_t arr[4];
     } data;
 
     //Set GPIO 1 to output to set the RF switch
@@ -132,10 +127,12 @@ TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, u
 }
 
 #if defined(LOAD_CONFIG) || defined(CALIBRATE)
-static TRANSCEIVER_ERR_e ADF7030_loadConfig(uint8_t config[], uint32_t len) {
+static TRANSCEIVER_ERR_e ADF7030_loadConfig(const uint8_t config[], uint32_t len) {
+
     if(ADF7030_getState() != ADF7030_PHY_OFF) {
         ADF7030_transitionState(ADF7030_PHY_OFF);
     }
+
     uint32_t i = 0;
     while (i <= len) {
 
@@ -190,23 +187,24 @@ TRANSCEIVER_ERR_e ADF7030_calibrate(void) {
         }
     }
 
-
     ADF7030_transitionState(ADF7030_PHY_ON);
-
     ADF7030_transitionState(ADF7030_DO_CAL);
 
     HAL_Delay(630);
 
-
+    time = HAL_GetTick();
+    while(ADF7030_getState() != ADF7030_PHY_ON) {
+        if(HAL_GetTick() - time > TRANSITION_TIMEOUT) {
+            return TRANSCEIVER_ERR_ERROR;
+        }
+    }
 
     ADF7030_memoryRead(PROFILE_RADIO_CAL_CFG1_Addr, reg_data.arr, 4);
-
     if(ADF7030_getState() != ADF7030_PHY_ON || (reg_data.word & 0x20000000) != 0x20000000) {
         return TRANSCEIVER_ERR_ERROR;
     }
 
     reg_data.word = 0x20002A21;
-
     ADF7030_memoryWrite(SM_DATA_CALIBRATION_Addr, reg_data.arr, 4);
 
     return TRANSCEIVER_ERR_OK;
@@ -235,15 +233,15 @@ static TRANSCEIVER_ERR_e ADF7030_retreiveCalibrationData(uint32_t *cal_data) {
         cal_data[i * 2] = calibrationRegisters[i];
         ADF7030_memoryRead(calibrationRegisters[i], (uint8_t *) &cal_data[i * 2 + 1], 4);
     }
+
+    return TRANSCEIVER_ERR_OK;
 }
 #endif
 
 #ifdef LOAD_CALIBRATION
-
 const uint32_t Calibration[] = {
     #include "Calibration.cfg"
 }
-
 const uint32_t cal_len = sizeof(Calibration);
 
 TRANSCEIVER_ERR_e ADF7030_1_loadCalibration(void) {
@@ -322,7 +320,6 @@ TRANSCEIVER_ERR_e ADF7030_transmitPacket(data_packet_s *packet) {
     ADF7030_transitionState(ADF7030_PHY_TX);
 
     // Switch the RF switch back to RX mode
-
     reg_data.word = 0x00000002;
     ADF7030_memoryWrite(ADF7030_GPIO_SET_REG, reg_data.arr, 4);
 
@@ -493,11 +490,6 @@ TRANSCEIVER_ERR_e ADF7030_memoryRead(uint32_t address, uint8_t *data, uint32_t n
         uint32_t word;
         uint8_t arr[4];
     } addr;
-
-    union {
-        uint32_t word;
-        uint8_t arr[nbytes];
-    } unaligned_data_u;
 
     uint8_t unaligned_data_arr[nbytes];
 
