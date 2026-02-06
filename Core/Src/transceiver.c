@@ -112,8 +112,8 @@ TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, u
     ADF7030_retreiveCalibrationData(calibrationData);
 #endif
 
-    //Set GPIO 4 to IRQ0 output
-    data.word = 0x00000006;
+    //Set GPIO 4 to IRQ1 output
+    data.word = 0x00000007;
     ADF7030_memoryWrite(PROFILE_GPCON4_7_Addr, data.arr, 4);
 
     ADF7030_radioSettings();
@@ -308,21 +308,45 @@ TRANSCEIVER_ERR_e ADF7030_transmitPacket(data_packet_s *packet) {
         uint8_t arr[130];
     } tx_data;
 
+    union {
+        uint8_t arr[4];
+        uint32_t word;
+    } addr_u;
+
+    addr_u.word = TX_PACKET_MEMORY;
+    addr_u.word = ADF7030_alignWord(addr_u.word);
     tx_data.packet = *packet;
 
     uint8_t command = 0x38;
 
     HAL_GPIO_WritePin(transceiver.cs_port, transceiver.cs_pin, GPIO_PIN_RESET);
     HAL_SPI_Transmit(transceiver.hspi, &command, 1, transceiver.spi_timeout);
+    HAL_SPI_Transmit(transceiver.hspi, addr_u.arr, 4, transceiver.spi_timeout);
     HAL_SPI_Transmit(transceiver.hspi, tx_data.arr, 130, transceiver.spi_timeout);
     HAL_GPIO_WritePin(transceiver.cs_port, transceiver.cs_pin, GPIO_PIN_SET);
 
     ADF7030_transitionState(ADF7030_PHY_TX);
+    ADF7030_STATE_e currentState = ADF7030_getState();
+    
+    union {
+        uint8_t arr[4];
+        uint32_t word;
+    } err_u;
+    err_u.word = 0;
+    ADF7030_memoryRead(MISC_FW_Addr, err_u.arr, 4);
 
     // Switch the RF switch back to RX mode
     reg_data.word = 0x00000002;
     ADF7030_memoryWrite(ADF7030_GPIO_SET_REG, reg_data.arr, 4);
 
+    uint32_t time = HAL_GetTick();
+    while(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_1) == GPIO_PIN_RESET) {
+        ADF7030_STATE_e state = ADF7030_getState();
+        // Wait for the packet to be transmitted
+        if (HAL_GetTick() - time > TRANSITION_TIMEOUT) {
+            return TRANSCEIVER_ERR_ERROR;
+        }
+    }
     return TRANSCEIVER_ERR_OK;
 }
 
@@ -365,9 +389,9 @@ TRANSCEIVER_ERR_e ADF7030_radioSettings() {
     reg_data_u.word = 0x000000FF;
     ADF7030_memoryWrite(GENERIC_PKT_CRC_FINAL_XOR_Addr, reg_data_u.arr, 4);
 
-    //TX base offset pointer: 0, RX base offset pointer: 512
+    //TX base offset pointer: AF0, RX base offset pointer: BF0
     ADF7030_memoryRead(GENERIC_PKT_BUFF_CFG0_Addr, reg_data_u.arr, 4);
-    reg_data_u.word = (reg_data_u.word & 0xFE800000) | 0x00000080;
+    reg_data_u.word = (reg_data_u.word & 0xFE800000) | 0x000AF2FC;
     ADF7030_memoryWrite(GENERIC_PKT_BUFF_CFG0_Addr, reg_data_u.arr, 4);
 
 
@@ -396,9 +420,9 @@ TRANSCEIVER_ERR_e ADF7030_receivePacket(data_packet_s *packet) {
     } reg_data_u;
 
     // Clear the IRQ0 flag for packet received
-    ADF7030_memoryRead(IRQ_CTRL_STATUS0_Addr, reg_data_u.arr, 4);
+    ADF7030_memoryRead(IRQ_CTRL_STATUS1_Addr, reg_data_u.arr, 4);
     reg_data_u.word = reg_data_u.word | 0x00000080;
-    ADF7030_memoryWrite(IRQ_CTRL_STATUS0_Addr, reg_data_u.arr, 4);
+    ADF7030_memoryWrite(IRQ_CTRL_STATUS1_Addr, reg_data_u.arr, 4);
 
     return TRANSCEIVER_ERR_OK;
 }

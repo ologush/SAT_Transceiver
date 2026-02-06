@@ -159,6 +159,14 @@ int main(void)
   temperatureQueue = xQueueCreate(10, sizeof(float));
   potentiometerQueue = xQueueCreate(10, sizeof(float));
   ADF7030_transitionState(ADF7030_PHY_RX);
+
+  data_packet_s test_packet = {
+    .header = 0xAB,
+    .payload = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A},
+    .length = 10
+  };
+
+  ADF7030_transmitPacket(&test_packet);
   /* USER CODE END 2 */
 
   /* Init scheduler */
