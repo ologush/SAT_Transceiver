@@ -67,13 +67,13 @@ TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, u
     if(SPI_host_initialization(&transceiver, 50) == TRANSCEIVER_ERR_ERROR) {
         return TRANSCEIVER_ERR_ERROR;
     }
-    ADF7030_transitionState(ADF7030_PHY_OFF);
+    ADF7030_transitionState(ADF7030_PHY_ON);
 
     float temperature = 0.0f;
-    //ADF7030_getTemperature(&temperature);
+    ADF7030_getTemperature(&temperature);
 
     ADF7030_STATE_e test = ADF7030_getState();
-    
+
 #ifdef LOAD_CONFIG
     ADF7030_1_loadConfig();
 #endif
@@ -213,6 +213,10 @@ TRANSCEIVER_ERR_e ADF7030_1_loadCalibration(void) {
 
 TRANSCEIVER_ERR_e ADF7030_getTemperature(float *temp) {
 
+    if(ADF7030_getState() != ADF7030_PHY_ON) {
+        ADF7030_transitionState(ADF7030_PHY_ON);
+    }
+
     ADF7030_transitionState(ADF7030_MON);
 
     union {
@@ -350,6 +354,16 @@ TRANSCEIVER_ERR_e ADF7030_transitionState(ADF7030_STATE_e target_state) {
 
     uint8_t command = (1 << 7) | target_state;
     SPI_tx(&transceiver, &command, 1);
+
+    ADF7030_TRANSITION_STATUS_e status = ADF7030_getTransitionStatus();
+    uint32_t ctr = 0;
+    do {
+        status = ADF7030_getTransitionStatus();
+        ctr++;
+        if(ctr > TRANSITION_TIMEOUT) {
+            return TRANSCEIVER_ERR_ERROR;
+        }
+    } while (status != ADF7030_IDLE_IN_STATE);
 
     return TRANSCEIVER_ERR_OK;
 

@@ -4,6 +4,7 @@
 #define ADF7030_1_INSTANCE_NUM 1
 #define TX_PACKET_MEMORY 0x2000AF0
 #define RX_PACKET_MEMORY 0x2000CF0
+#define TRANSITION_TIMEOUT 1000
 
 #include <stdint.h>
 #include "spi.h"
