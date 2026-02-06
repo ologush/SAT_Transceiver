@@ -2,6 +2,7 @@
 #include "adi_adf7030-1_reg.h"
 #include "gpio.h"
 
+#define LOAD_CONFIG
 
 static ADF7030_s transceiver;
 static ADF7030_STATE_e transceiver_state;
@@ -10,6 +11,13 @@ static TRANSCEIVER_ERR_e SPI_txrx(ADF7030_s *target, uint8_t *tx, uint8_t *rx, u
 static TRANSCEIVER_ERR_e SPI_tx(ADF7030_s *target, uint8_t *tx, uint16_t size);
 static TRANSCEIVER_ERR_e SPI_host_initialization(ADF7030_s *target, uint32_t timeout_ms);
 static uint32_t ADF7030_alignWord(uint32_t address);
+
+#ifdef LOAD_CONFIG
+static TRANSCEIVER_ERR_e ADF7030_1_loadConfig(uint8_t config[], uint32_t len);
+static const uint8_t Radio_Memory_Configuration[] = {
+    #include "Configuration.cfg"
+};
+#endif
 
 static TRANSCEIVER_ERR_e SPI_txrx(ADF7030_s *target, uint8_t *tx, uint8_t *rx, uint16_t size) {
 
@@ -57,8 +65,6 @@ TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, u
     transceiver.miso_pin = miso_pin;
     transceiver.spi_timeout = 100;
 
-    transceiver_state = ADF7030_PHY_OFF;
-
     HAL_GPIO_WritePin(transceiver.rst_port, transceiver.rst_pin, GPIO_PIN_RESET);
     HAL_Delay(10);
     HAL_GPIO_WritePin(transceiver.rst_port, transceiver.rst_pin, GPIO_PIN_SET);
@@ -69,19 +75,17 @@ TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, u
     }
     ADF7030_transitionState(ADF7030_PHY_ON);
 
-    float temperature = 0.0f;
-    ADF7030_getTemperature(&temperature);
-
-    ADF7030_STATE_e test = ADF7030_getState();
 
 #ifdef LOAD_CONFIG
-    ADF7030_1_loadConfig();
+    ADF7030_1_loadConfig(Radio_Memory_Configuration, sizeof(Radio_Memory_Configuration));
 #endif
 
     union {
         uint32_t word;
         uint8_t arr[4];
     } data;
+
+    ADF7030_memoryRead(PROFILE_CH_FREQ_Addr, data.arr, 4);
 
     //Set GPIO 4 to IRQ0 output
     data.word = 0x00000006;
@@ -95,11 +99,10 @@ TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, u
 }
 
 #ifdef LOAD_CONFIG
-const uint8_t Radio_Memory_Configuration[] = {
-    #include "Settings_ADF7030-1.cfg"
-}
-TRANSCEIVER_ERR_e ADF7030_1_loadConfig(uint8_t config[], uint32_t len) {
-
+static TRANSCEIVER_ERR_e ADF7030_1_loadConfig(uint8_t config[], uint32_t len) {
+    if(ADF7030_getState() != ADF7030_PHY_OFF) {
+        ADF7030_transitionState(ADF7030_PHY_OFF);
+    }
     uint32_t i = 0;
     while (i <= len) {
 
@@ -118,7 +121,7 @@ TRANSCEIVER_ERR_e ADF7030_1_loadConfig(uint8_t config[], uint32_t len) {
             return TRANSCEIVER_ERR_ERROR;
         }
 
-        SPI_tx(transceiver.hspi, &config[i], block_len);
+        SPI_tx(&transceiver, &config[i], block_len);
 
         i += block_len;
 

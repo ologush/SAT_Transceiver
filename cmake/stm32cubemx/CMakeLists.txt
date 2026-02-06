@@ -14,6 +14,7 @@ target_compile_definitions(stm32cubemx INTERFACE
 
 target_include_directories(stm32cubemx INTERFACE
     ../../Core/Inc
+    ../../Core/configs
     ../../USB_DEVICE/App
     ../../USB_DEVICE/Target
     ../../Drivers/STM32F3xx_HAL_Driver/Inc
