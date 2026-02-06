@@ -91,24 +91,36 @@ TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, u
     ADF7030_loadConfig(Radio_Memory_Configuration, sizeof(Radio_Memory_Configuration));
 #endif
 
-#ifdef CALIBRATE
-    ADF7030_calibrate();
-    uint32_t calibrationData[30];
-    ADF7030_retreiveCalibrationData(calibrationData);
-#endif
+    union {
+        uint32_t word;
+        uint8_t arr[4];
+    } GENERIC_PKT_FRAME_CFG2_data;
 
     union {
         uint32_t word;
         uint8_t arr[4];
     } data;
 
+    //Set GPIO 1 to output to set the RF switch
+    data.word = 0x00001900;
+    ADF7030_memoryWrite(PROFILE_GPCON0_3_Addr, data.arr, 4);
+    
+    //Turn RF switch to TX mode so there is no interference during the calibration process
+    data.word = 0x00000002;
+    ADF7030_memoryWrite(ADF7030_GPIO_RESET_REG, data.arr, 4);
+
+#ifdef CALIBRATE
+    if(ADF7030_calibrate() != TRANSCEIVER_ERR_OK) {
+        return TRANSCEIVER_ERR_ERROR;
+    }
+    uint32_t calibrationData[30];
+    ADF7030_retreiveCalibrationData(calibrationData);
+#endif
+
     //Set GPIO 4 to IRQ0 output
     data.word = 0x00000006;
     ADF7030_memoryWrite(PROFILE_GPCON4_7_Addr, data.arr, 4);
 
-    //Set GPIO 1 to output to set the RF switch
-    data.word = 0x00001900;
-    ADF7030_memoryWrite(PROFILE_GPCON0_3_Addr, data.arr, 4);
     return TRANSCEIVER_ERR_OK;
 
 }
@@ -123,7 +135,7 @@ static TRANSCEIVER_ERR_e ADF7030_loadConfig(uint8_t config[], uint32_t len) {
 
         uint32_t block_len;
 
-        block_len = (config[i] << 16) | (config[i + 1] << 8) | (config[i + 2]) - 3;
+        block_len = (config[i] << 16) | (config[i + 1] << 8) | (config[i + 2]);
 
         if (block_len < 3) {
             return TRANSCEIVER_ERR_ERROR;
@@ -164,12 +176,14 @@ TRANSCEIVER_ERR_e ADF7030_calibrate(void) {
     ADF7030_memoryWrite(SM_DATA_CALIBRATION_Addr, reg_data.arr, 4);
 
     ADF7030_transitionState(ADF7030_CFG_DEV);
-    
-    while(ADF7030_getTransitionStatus() != ADF7030_IDLE_IN_STATE);
 
-    if(ADF7030_getState() != ADF7030_PHY_OFF) {
-        return TRANSCEIVER_ERR_ERROR;
+    uint32_t time = HAL_GetTick();
+    while(ADF7030_getState() != ADF7030_PHY_OFF) {
+        if(HAL_GetTick() - time > TRANSITION_TIMEOUT) {
+            return TRANSCEIVER_ERR_ERROR;
+        }
     }
+
 
     ADF7030_transitionState(ADF7030_PHY_ON);
 
@@ -211,7 +225,7 @@ static uint32_t calibrationRegisters[] = {
 };
 
 static TRANSCEIVER_ERR_e ADF7030_retreiveCalibrationData(uint32_t *cal_data) {
-    for(uint8_t i = 0; i < sizeof(calibrationRegisters); i++) {
+    for(uint8_t i = 0; i < sizeof(calibrationRegisters) / 4; i++) {
         cal_data[i * 2] = calibrationRegisters[i];
         ADF7030_memoryRead(calibrationRegisters[i], (uint8_t *) &cal_data[i * 2 + 1], 4);
     }
@@ -283,7 +297,7 @@ TRANSCEIVER_ERR_e ADF7030_transmitPacket(data_packet_s *packet) {
     reg_data.word = 0x00000002;
 
     // Set GPIO 1 low to put the RF switch in TX mode
-    ADF7030_memoryWrite(0x40000820UL, reg_data.arr, 4);
+    ADF7030_memoryWrite(ADF7030_GPIO_RESET_REG, reg_data.arr, 4);
 
     union {
         data_packet_s packet;
@@ -304,7 +318,7 @@ TRANSCEIVER_ERR_e ADF7030_transmitPacket(data_packet_s *packet) {
     // Switch the RF switch back to RX mode
 
     reg_data.word = 0x00000002;
-    ADF7030_memoryWrite(0x4000081CUL, reg_data.arr, 4);
+    ADF7030_memoryWrite(ADF7030_GPIO_SET_REG, reg_data.arr, 4);
 
     return TRANSCEIVER_ERR_OK;
 }
