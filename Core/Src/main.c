@@ -158,6 +158,7 @@ int main(void)
   HAL_ADC_Start(&hadc1);
   temperatureQueue = xQueueCreate(10, sizeof(float));
   potentiometerQueue = xQueueCreate(10, sizeof(float));
+  ADF7030_transitionState(ADF7030_PHY_RX);
   /* USER CODE END 2 */
 
   /* Init scheduler */

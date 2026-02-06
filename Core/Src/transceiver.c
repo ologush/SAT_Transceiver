@@ -121,6 +121,12 @@ TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, u
     data.word = 0x00000006;
     ADF7030_memoryWrite(PROFILE_GPCON4_7_Addr, data.arr, 4);
 
+    ADF7030_radioSettings();
+
+    // Set the RF switch back to RX mode and put the system in the RX state
+    data.word = 0x00000002;
+    ADF7030_memoryWrite(ADF7030_GPIO_SET_REG, data.arr, 4);
+
     return TRANSCEIVER_ERR_OK;
 
 }
@@ -341,13 +347,13 @@ TRANSCEIVER_ERR_e ADF7030_radioSettings() {
 
     ADF7030_memoryRead(GENERIC_PKT_FRAME_CFG2_Addr, reg_data_u.arr, 4);
     //Len set to 8 bits, need to add the ENDEC_MODE, CRC_SHIFT_IN_ZEROS is set to 1
-    reg_data_u.word = (reg_data_u.word & 0x00FFCFFF) | 0x01001FFF;
+    reg_data_u.word = (reg_data_u.word & 0x00FFCFFF) | 0x01001800;
     ADF7030_memoryWrite(GENERIC_PKT_FRAME_CFG2_Addr, reg_data_u.arr, 4);
 
 
     ADF7030_memoryRead(GENERIC_PKT_FRAME_CFG1_Addr, reg_data_u.arr, 4);
-    //Enable IRQ1 when full packet has been rx or tx, no irq0, no length setting
-    reg_data_u.word = (reg_data_u.word & 0x0000F000) | 0x80000080;
+    //Enable IRQ1 when full packet has been rx or tx, no irq0, inherit length setting from config
+    reg_data_u.word = (reg_data_u.word & 0x0000FFFF) | 0x80000000;
     ADF7030_memoryWrite(GENERIC_PKT_FRAME_CFG1_Addr, reg_data_u.arr, 4);
 
     //Set the CRC seed as 0xAA
@@ -370,7 +376,7 @@ TRANSCEIVER_ERR_e ADF7030_radioSettings() {
 
     ADF7030_memoryRead(GENERIC_PKT_BUFF_CFG1_Addr, reg_data_u.arr, 4);
     //TX_SIZE 256, RX_SIZE 256, autoturnaround TX to RX
-    reg_data_u.word = (reg_data_u.word & 0x54000000) | 0xD0020100;
+    reg_data_u.word = (reg_data_u.word & 0x54000000) | 0x80020100;
     ADF7030_memoryWrite(GENERIC_PKT_BUFF_CFG1_Addr, reg_data_u.arr, 4);
 
     return TRANSCEIVER_ERR_OK;
