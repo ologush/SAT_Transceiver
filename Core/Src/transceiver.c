@@ -9,6 +9,7 @@ static ADF7030_STATE_e transceiver_state;
 static TRANSCEIVER_ERR_e SPI_txrx(ADF7030_s *target, uint8_t *tx, uint8_t *rx, uint16_t size);
 static TRANSCEIVER_ERR_e SPI_tx(ADF7030_s *target, uint8_t *tx, uint16_t size);
 static TRANSCEIVER_ERR_e SPI_host_initialization(ADF7030_s *target, uint32_t timeout_ms);
+static uint32_t ADF7030_alignWord(uint32_t address);
 
 static TRANSCEIVER_ERR_e SPI_txrx(ADF7030_s *target, uint8_t *tx, uint8_t *rx, uint16_t size) {
 
@@ -54,6 +55,7 @@ TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, u
     transceiver.rst_pin = rst_pin;
     transceiver.miso_port = miso_port;
     transceiver.miso_pin = miso_pin;
+    transceiver.spi_timeout = 100;
 
     transceiver_state = ADF7030_PHY_OFF;
 
@@ -63,6 +65,25 @@ TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, u
     HAL_Delay(10);
 
     if(SPI_host_initialization(&transceiver, 50) == TRANSCEIVER_ERR_ERROR) {
+        return TRANSCEIVER_ERR_ERROR;
+    }
+    ADF7030_transitionState(ADF7030_PHY_OFF);
+    union {
+        uint32_t word;
+        uint8_t arr[4];
+    } test_data_1_u;
+    
+    union {
+        uint32_t word;
+        uint8_t arr[4];
+    } test_data_2_u;
+    float temperature = 0.0f;
+    //ADF7030_memoryRead(SM_DATA_CALIBRATION_Addr, test_data_1_u.arr, 4);
+    ADF7030_memoryRead(MISC_FW_Addr, test_data_2_u.arr, 4);
+    ADF7030_getTemperature(&temperature);
+    ADF7030_memoryRead(MISC_FW_Addr, test_data_1_u.arr, 4);
+    ADF7030_STATE_e test = ADF7030_getState();
+    if(test_data_1_u.word == 0 || test_data_2_u.word == 0) {
         return TRANSCEIVER_ERR_ERROR;
     }
 
@@ -351,6 +372,15 @@ TRANSCEIVER_ERR_e ADF7030_transitionState(ADF7030_STATE_e target_state) {
 
 ADF7030_STATE_e ADF7030_getState() {
     
+    union {
+        uint8_t arr[4];
+        uint32_t word;
+    } status_data_u;
+
+    status_data_u.word = 0;
+
+    ADF7030_memoryRead(MISC_FW_Addr, status_data_u.arr, 4);
+    return (ADF7030_STATE_e) (status_data_u.word & 0x00003F00) >> 8;
 }
 
 ADF7030_TRANSITION_STATUS_e ADF7030_getTransitionStatus() {
@@ -405,14 +435,55 @@ TRANSCEIVER_ERR_e ADF7030_memoryRead(uint32_t address, uint8_t *data, uint32_t n
         uint8_t arr[4];
     } addr;
 
-    addr.word = address;
-    
+    union {
+        uint32_t word;
+        uint8_t arr[nbytes];
+    } unaligned_data_u;
+
+    uint8_t unaligned_data_arr[nbytes];
+
+    addr.word = ADF7030_alignWord(address);
+    //addr.word = address;
+
+    // uint8_t command_array[11];
+    // command_array[0] = command;
+    // command_array[1] = addr.arr[0];
+    // command_array[2] = addr.arr[1];
+    // command_array[3] = addr.arr[2];
+    // command_array[4] = addr.arr[3];
+    // for(uint32_t i = 0; i < nbytes + 2; i++) {
+    //     command_array[5 + i] = 0x00;
+    // }
+
+    uint8_t rx_array[11] = {0};
+
     HAL_GPIO_WritePin(transceiver.cs_port, transceiver.cs_pin, GPIO_PIN_RESET);
     HAL_SPI_Transmit(transceiver.hspi, &command, 1, transceiver.spi_timeout);
     HAL_SPI_Transmit(transceiver.hspi, addr.arr, 6, transceiver.spi_timeout); //Adding the extra two bytes to transmit nonsense so that we can start receiving the data on the TransmitReceive call
-    HAL_SPI_Receive(transceiver.hspi, data, nbytes, transceiver.spi_timeout);
+    HAL_SPI_Receive(transceiver.hspi, unaligned_data_arr, nbytes, transceiver.spi_timeout);
+    // HAL_StatusTypeDef status;
+    // status = HAL_SPI_TransmitReceive(transceiver.hspi, command_array, rx_array, 5 + nbytes + 2, transceiver.spi_timeout);
     HAL_GPIO_WritePin(transceiver.cs_port, transceiver.cs_pin, GPIO_PIN_SET);
+
+    for(uint32_t i = 0; i < nbytes; i++) {
+        data[i] = unaligned_data_arr[nbytes - i - 1];
+    }
 
     return TRANSCEIVER_ERR_OK;
 
+}
+
+static uint32_t ADF7030_alignWord(uint32_t word) {
+
+    union {
+        uint32_t word;
+        uint8_t arr[4];
+    } returnWord;
+    returnWord.word = 0;
+    returnWord.arr[0] = (uint8_t) ((word & 0xFF000000) >> 24);
+    returnWord.arr[1] = (uint8_t) ((word & 0x00FF0000) >> 16);
+    returnWord.arr[2] = (uint8_t) ((word & 0x0000FF00) >> 8);
+    returnWord.arr[3] = (uint8_t) (word & 0x000000FF);
+
+    return returnWord.word;
 }

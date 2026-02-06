@@ -43,8 +43,8 @@ typedef enum {
     ADF7030_CFG_DEV   = 0x05,
     ADF7030_CCA       = 0x06,
     ADF7030_DO_CAL    = 0x09,
-    ADF7030_GPCLK     = 0x10,
     ADF7030_MON       = 0x0A,
+    ADF7030_GPLK      = 0x0B,
     ADF7030_LFRC_CAL  = 0x0C
 } ADF7030_STATE_e;
 
