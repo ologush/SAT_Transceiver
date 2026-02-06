@@ -2,7 +2,7 @@
 #include "adi_adf7030-1_reg.h"
 #include "gpio.h"
 
-#define LOAD_CONFIG
+
 
 static ADF7030_s transceiver;
 static ADF7030_STATE_e transceiver_state;
@@ -11,12 +11,24 @@ static TRANSCEIVER_ERR_e SPI_txrx(ADF7030_s *target, uint8_t *tx, uint8_t *rx, u
 static TRANSCEIVER_ERR_e SPI_tx(ADF7030_s *target, uint8_t *tx, uint16_t size);
 static TRANSCEIVER_ERR_e SPI_host_initialization(ADF7030_s *target, uint32_t timeout_ms);
 static uint32_t ADF7030_alignWord(uint32_t address);
+static TRANSCEIVER_ERR_e ADF7030_alignMultipleWords(uint8_t *data, uint32_t nwords, uint8_t *aligned_data);
 
 #ifdef LOAD_CONFIG
-static TRANSCEIVER_ERR_e ADF7030_1_loadConfig(uint8_t config[], uint32_t len);
+static TRANSCEIVER_ERR_e ADF7030_loadConfig(uint8_t config[], uint32_t len);
 static const uint8_t Radio_Memory_Configuration[] = {
     #include "Configuration.cfg"
 };
+#endif
+
+#ifdef CALIBRATE
+static TRANSCEIVER_ERR_e ADF7030_loadConfig(uint8_t config[], uint32_t len);
+static TRANSCEIVER_ERR_e ADF7030_calibrate(void);
+static TRANSCEIVER_ERR_e ADF7030_retreiveCalibrationData(uint32_t *cal_data);
+const uint8_t Calibration[] = {
+    #include "OffLineCalibrations.cfg"
+};
+
+const uint32_t cal_len = sizeof(Calibration);
 #endif
 
 static TRANSCEIVER_ERR_e SPI_txrx(ADF7030_s *target, uint8_t *tx, uint8_t *rx, uint16_t size) {
@@ -75,17 +87,20 @@ TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, u
     }
     ADF7030_transitionState(ADF7030_PHY_ON);
 
-
 #ifdef LOAD_CONFIG
-    ADF7030_1_loadConfig(Radio_Memory_Configuration, sizeof(Radio_Memory_Configuration));
+    ADF7030_loadConfig(Radio_Memory_Configuration, sizeof(Radio_Memory_Configuration));
+#endif
+
+#ifdef CALIBRATE
+    ADF7030_calibrate();
+    uint32_t calibrationData[30];
+    ADF7030_retreiveCalibrationData(calibrationData);
 #endif
 
     union {
         uint32_t word;
         uint8_t arr[4];
     } data;
-
-    ADF7030_memoryRead(PROFILE_CH_FREQ_Addr, data.arr, 4);
 
     //Set GPIO 4 to IRQ0 output
     data.word = 0x00000006;
@@ -98,8 +113,8 @@ TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, u
 
 }
 
-#ifdef LOAD_CONFIG
-static TRANSCEIVER_ERR_e ADF7030_1_loadConfig(uint8_t config[], uint32_t len) {
+#if defined(LOAD_CONFIG) || defined(CALIBRATE)
+static TRANSCEIVER_ERR_e ADF7030_loadConfig(uint8_t config[], uint32_t len) {
     if(ADF7030_getState() != ADF7030_PHY_OFF) {
         ADF7030_transitionState(ADF7030_PHY_OFF);
     }
@@ -132,17 +147,10 @@ static TRANSCEIVER_ERR_e ADF7030_1_loadConfig(uint8_t config[], uint32_t len) {
 #endif
 
 #ifdef CALIBRATE
-const uint8_t Calibration[] = {
-    #include "OffLineCalibrations.cfg"
-}
-
-const uint32_t cal_len = sizeof(Calibration);
-
-TRANSCEIVER_ERR_e ADF7030_1_calibrate(void) {
-
+TRANSCEIVER_ERR_e ADF7030_calibrate(void) {
 
     if (transceiver_state != ADF7030_PHY_OFF) {
-        return TRANSCEIVER_ERR_ERROR;
+        ADF7030_transitionState(ADF7030_PHY_OFF);
     }
 
     union {
@@ -152,7 +160,7 @@ TRANSCEIVER_ERR_e ADF7030_1_calibrate(void) {
 
     reg_data.word = 0x20002971;
 
-    ADF7030_1_loadConfiguration(Calibration, cal_len);
+    ADF7030_loadConfig(Calibration, cal_len);
     ADF7030_memoryWrite(SM_DATA_CALIBRATION_Addr, reg_data.arr, 4);
 
     ADF7030_transitionState(ADF7030_CFG_DEV);
@@ -171,7 +179,7 @@ TRANSCEIVER_ERR_e ADF7030_1_calibrate(void) {
 
 
 
-    ADF7030_memoryRead(PROFILE_RADIO_CAL_CFG1_Addr, reg_data.arr);
+    ADF7030_memoryRead(PROFILE_RADIO_CAL_CFG1_Addr, reg_data.arr, 4);
 
     if(ADF7030_getState() != ADF7030_PHY_ON || (reg_data.word & 0x20000000) != 0x20000000) {
         return TRANSCEIVER_ERR_ERROR;
@@ -182,6 +190,31 @@ TRANSCEIVER_ERR_e ADF7030_1_calibrate(void) {
     ADF7030_memoryWrite(SM_DATA_CALIBRATION_Addr, reg_data.arr, 4);
 
     return TRANSCEIVER_ERR_OK;
+}
+
+static uint32_t calibrationRegisters[] = {
+    PROFILE_RADIO_CAL_RESULTS0_Addr,
+    PROFILE_RADIO_CAL_RESULTS1_Addr,
+    PROFILE_RADIO_CAL_RESULTS2_Addr,
+    PROFILE_RADIO_CAL_RESULTS5_Addr,
+    PROFILE_RADIO_CAL_RESULTS6_Addr,
+    PROFILE_RADIO_CAL_RESULTS7_Addr,
+    PROFILE_RADIO_CAL_RESULTS8_Addr,
+    VCO_CAL_RESULTS_DATA0_Addr,
+    VCO_CAL_RESULTS_DATA1_Addr,
+    VCO_CAL_RESULTS_DATA2_Addr,
+    VCO_CAL_RESULTS_DATA3_Addr,
+    VCO_CAL_RESULTS_DATA4_Addr,
+    VCO_CAL_RESULTS_DATA5_Addr,
+    VCO_CAL_RESULTS_DATA6_Addr,
+    VCO_CAL_RESULTS_DATA7_Addr
+};
+
+static TRANSCEIVER_ERR_e ADF7030_retreiveCalibrationData(uint32_t *cal_data) {
+    for(uint8_t i = 0; i < sizeof(calibrationRegisters); i++) {
+        cal_data[i * 2] = calibrationRegisters[i];
+        ADF7030_memoryRead(calibrationRegisters[i], (uint8_t *) &cal_data[i * 2 + 1], 4);
+    }
 }
 #endif
 
@@ -358,6 +391,7 @@ TRANSCEIVER_ERR_e ADF7030_transitionState(ADF7030_STATE_e target_state) {
     uint8_t command = (1 << 7) | target_state;
     SPI_tx(&transceiver, &command, 1);
 
+    // Strange behaviour if left to be initialized in do. Would like to revisit this later
     ADF7030_TRANSITION_STATUS_e status = ADF7030_getTransitionStatus();
     uint32_t ctr = 0;
     do {
@@ -416,12 +450,15 @@ TRANSCEIVER_ERR_e ADF7030_memoryWrite(uint32_t address, uint8_t *data, uint32_t 
         uint8_t arr[4];
     } addr;
 
-    addr.word = address;
+    addr.word = ADF7030_alignWord(address);
+
+    uint8_t aligned_data[nbytes];
+    ADF7030_alignMultipleWords(data, nbytes / 4, aligned_data);
 
     HAL_GPIO_WritePin(transceiver.cs_port, transceiver.cs_pin, GPIO_PIN_RESET);
     HAL_SPI_Transmit(transceiver.hspi, &command, 1, transceiver.spi_timeout);
     HAL_SPI_Transmit(transceiver.hspi, addr.arr, 4, transceiver.spi_timeout);
-    HAL_SPI_Transmit(transceiver.hspi, data, nbytes, transceiver.spi_timeout);
+    HAL_SPI_Transmit(transceiver.hspi, aligned_data, nbytes, transceiver.spi_timeout);
     HAL_GPIO_WritePin(transceiver.cs_port, transceiver.cs_pin, GPIO_PIN_SET);
 
     return TRANSCEIVER_ERR_OK;
@@ -473,4 +510,18 @@ static uint32_t ADF7030_alignWord(uint32_t word) {
     returnWord.arr[3] = (uint8_t) (word & 0x000000FF);
 
     return returnWord.word;
+
+}
+
+static TRANSCEIVER_ERR_e ADF7030_alignMultipleWords(uint8_t *data, uint32_t nwords, uint8_t *aligned_data) {
+
+    for(uint32_t i = 0; i < nwords; i++) {
+        aligned_data[i * 4 + 0] = data[i * 4 + 3];
+        aligned_data[i * 4 + 1] = data[i * 4 + 2];
+        aligned_data[i * 4 + 2] = data[i * 4 + 1];
+        aligned_data[i * 4 + 3] = data[i * 4 + 0];
+    }
+
+    return TRANSCEIVER_ERR_OK;
+
 }

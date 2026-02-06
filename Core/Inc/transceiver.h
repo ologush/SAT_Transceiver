@@ -6,6 +6,9 @@
 #define RX_PACKET_MEMORY 0x2000CF0
 #define TRANSITION_TIMEOUT 1000
 
+#define LOAD_CONFIG
+#define CALIBRATE
+
 #include <stdint.h>
 #include "spi.h"
 
