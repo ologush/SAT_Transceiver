@@ -2,8 +2,15 @@
 #define TRANSCEIVER
 
 #define ADF7030_1_INSTANCE_NUM 1
-#define TX_PACKET_MEMORY 0x2000AF0
-#define RX_PACKET_MEMORY 0x2000CF0
+#define TX_PACKET_MEMORY 0x20000AF0
+#define RX_PACKET_MEMORY 0x20000BF0
+#define TRANSITION_TIMEOUT 1000
+
+#define ADF7030_GPIO_RESET_REG  0x40000820UL
+#define ADF7030_GPIO_SET_REG    0x4000081CUL
+
+#define LOAD_CONFIG
+#define CALIBRATE
 
 #include <stdint.h>
 #include "spi.h"
@@ -43,8 +50,8 @@ typedef enum {
     ADF7030_CFG_DEV   = 0x05,
     ADF7030_CCA       = 0x06,
     ADF7030_DO_CAL    = 0x09,
-    ADF7030_GPCLK     = 0x10,
     ADF7030_MON       = 0x0A,
+    ADF7030_GPLK      = 0x0B,
     ADF7030_LFRC_CAL  = 0x0C
 } ADF7030_STATE_e;
 
@@ -97,24 +104,17 @@ TRANSCEIVER_ERR_e ADF7030_getTemperature(float *temp);
 TRANSCEIVER_ERR_e ADF7030_transmitPacket(data_packet_s *packet);
 TRANSCEIVER_ERR_e ADF7030_receivePacket(data_packet_s *packet);
 TRANSCEIVER_ERR_e ADF7030_transitionState(ADF7030_STATE_e target_state);
-ADF7030_STATE_e ADF7030_getState(void);
-ADF7030_TRANSITION_STATUS_e ADF7030_getTransitionStatus(void);
-ADF7030_READY_STATE_e ADF7030_getReadyState(void);
 TRANSCEIVER_ERR_e ADF7030_radioCommand();
 TRANSCEIVER_ERR_e ADF7030_memoryCommand(uint32_t address);
 TRANSCEIVER_ERR_e ADF7030_getTemperature(float *temp);
-
 TRANSCEIVER_ERR_e ADF7030_memoryWrite(uint32_t address, uint8_t *data, uint32_t nbytes);
 TRANSCEIVER_ERR_e ADF7030_memoryRead(uint32_t address, uint8_t *data, uint32_t nbytes);
 TRANSCEIVER_ERR_e ADF7030_radioSettings(void);
 
+ADF7030_STATE_e ADF7030_getState(void);
 
-#ifdef LOAD_CONFIG
-void ADF7030_1_loadConfiguration(void);
-#endif
+ADF7030_TRANSITION_STATUS_e ADF7030_getTransitionStatus(void);
 
-#ifdef CALIBRATE
-void ADF7030_1_calibrate(void);
-#endif
+ADF7030_READY_STATE_e ADF7030_getReadyState(void);
 
 #endif
