@@ -31,7 +31,6 @@
 /* USER CODE BEGIN Includes */
 #include "task.h"
 #include "transceiver.h"
-#include "queue.h"
 #include "temp_sensor.h"
 #include "potentiometer.h"
 /* USER CODE END Includes */
@@ -55,9 +54,6 @@
 
 /* USER CODE BEGIN PV */
 data_packet_s receivedPacket;
-
-QueueHandle_t temperatureQueue;
-QueueHandle_t potentiometerQueue;
 
 static uint16_t adc_data[ADC_NUM_CONVERSIONS];
 
@@ -127,14 +123,6 @@ int main(void)
                               3,
                               &xADCSCommandHandle);
   
-  xSensorTaskReturned = xTaskCreate(
-                              vSensorTask,
-                              "Sensor",
-                              SENSOR_STACK_SIZE,
-                              NULL,
-                              4,
-                              &xSensorHandle);
-  
     
   /* USER CODE END Init */
 
@@ -165,8 +153,6 @@ int main(void)
 
   HAL_TIM_Base_Start(&htim3);
 
-  temperatureQueue = xQueueCreate(10, sizeof(float));
-  potentiometerQueue = xQueueCreate(10, sizeof(float));
   ADF7030_transitionState(ADF7030_PHY_RX);
 
   data_packet_s test_packet = {
@@ -176,7 +162,7 @@ int main(void)
   };
 
   ADF7030_transmitPacket(&test_packet);
-  
+
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -277,16 +263,6 @@ void vADCSCommandTask(void * pvParameters) {
   for(;;) {
 
   }
-
-  vTaskDelete(NULL);
-}
-
-void vSensorTask(void * pvParameters) {
-
-  for(;;) {
-
-    }
-  
 
   vTaskDelete(NULL);
 }
