@@ -20,7 +20,9 @@
 #include "main.h"
 #include "cmsis_os.h"
 #include "adc.h"
+#include "dma.h"
 #include "spi.h"
+#include "tim.h"
 #include "usart.h"
 #include "usb_device.h"
 #include "gpio.h"
@@ -46,17 +48,21 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-
+#define ADC_NUM_CONVERSIONS 2
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
 data_packet_s receivedPacket;
-static uint8_t ADC_tracker = 0;
 
 QueueHandle_t temperatureQueue;
 QueueHandle_t potentiometerQueue;
+
+static uint16_t adc_data[ADC_NUM_CONVERSIONS];
+
+float current_temperature;
+float current_potentiometer_percentage;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -141,9 +147,11 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_ADC1_Init();
   MX_USART1_Init();
   MX_SPI1_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 
   // Turn on XCVR power
@@ -153,7 +161,10 @@ int main(void)
 
 
   HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
-  HAL_ADC_Start(&hadc1);
+  HAL_ADC_Start_DMA(&hadc1, (uint32_t *) adc_data, ADC_NUM_CONVERSIONS);
+
+  HAL_TIM_Base_Start(&htim3);
+
   temperatureQueue = xQueueCreate(10, sizeof(float));
   potentiometerQueue = xQueueCreate(10, sizeof(float));
   ADF7030_transitionState(ADF7030_PHY_RX);
@@ -165,6 +176,7 @@ int main(void)
   };
 
   ADF7030_transmitPacket(&test_packet);
+  
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -282,6 +294,13 @@ void vSensorTask(void * pvParameters) {
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
   if(GPIO_Pin == GPIO_PIN_1) {
     ADF7030_receivePacket(&receivedPacket);
+  }
+}
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
+  if (hadc->Instance == ADC1) {
+    current_temperature = temp_sensor_ADCToTemperature(adc_data[0]);
+    current_potentiometer_percentage = potentiometer_ADCToPercentage(adc_data[1]);
   }
 }
 

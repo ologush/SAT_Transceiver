@@ -38,6 +38,8 @@ target_sources(stm32cubemx INTERFACE
     ../../Core/Src/transceiver.c
     ../../Core/Src/temp_sensor.c
     ../../Core/Src/potentiometer.c
+    ../../Core/Src/dma.c
+    ../../Core/Src/tim.c
     ../../Core/Src/stm32f3xx_it.c
     ../../Core/Src/stm32f3xx_hal_msp.c
     ../../Core/Src/stm32f3xx_hal_timebase_tim.c
