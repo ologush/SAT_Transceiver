@@ -30,6 +30,8 @@
 #include "task.h"
 #include "transceiver.h"
 #include "queue.h"
+#include "temp_sensor.h"
+#include "potentiometer.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -39,11 +41,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define VOLTAGE_REF     3.3f
-#define ADC_RESOLUTION  4095.0f
-#define V_OFFSET        0.4f
-#define TEMP_COEFF      0.0195f
-#define T_INFLECTION    0.0f
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -274,20 +272,9 @@ void vADCSCommandTask(void * pvParameters) {
 void vSensorTask(void * pvParameters) {
 
   for(;;) {
-    HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
-    uint32_t adc_value = HAL_ADC_GetValue(&hadc1);
 
-    if(ADC_tracker == 0) {
-      float temperature = (float)adc_value * (VOLTAGE_REF / ADC_RESOLUTION);
-      temperature = (temperature - V_OFFSET) / TEMP_COEFF + T_INFLECTION;
-      xQueueSendToBack(temperatureQueue, &temperature, 0);
-      ADC_tracker++;
-    } else {
-      float potentiometer = (float)adc_value * (VOLTAGE_REF / ADC_RESOLUTION);
-      xQueueSendToBack(potentiometerQueue, &potentiometer, 0);
-      ADC_tracker = 0;
     }
-  }
+  
 
   vTaskDelete(NULL);
 }
