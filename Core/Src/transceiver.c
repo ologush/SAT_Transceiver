@@ -91,10 +91,17 @@ TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, u
     ADF7030_loadConfig(Radio_Memory_Configuration, sizeof(Radio_Memory_Configuration));
 #endif
 
+
+
     union {
         uint32_t word;
         uint8_t arr[4];
     } data;
+
+    data.word = 0;
+    ADF7030_memoryRead(PROFILE_LPM_CFG0_Addr, data.arr, 4);
+    data.word = data.word | 0x00010000;
+    ADF7030_memoryWrite(PROFILE_LPM_CFG0_Addr, data.arr, 4);
 
     //Set GPIO 1 to output to set the RF switch
     data.word = 0x00001900;
@@ -112,8 +119,9 @@ TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, u
     ADF7030_retreiveCalibrationData(calibrationData);
 #endif
 
+    ADF7030_transitionState(ADF7030_PHY_OFF);
     //Set GPIO 4 to IRQ1 output
-    data.word = 0x00000007;
+    data.word = 0x0000001C;
     ADF7030_memoryWrite(PROFILE_GPCON4_7_Addr, data.arr, 4);
 
     ADF7030_radioSettings();
@@ -294,6 +302,10 @@ TRANSCEIVER_ERR_e ADF7030_getTemperature(float *temp) {
 
 TRANSCEIVER_ERR_e ADF7030_transmitPacket(data_packet_s *packet) {
 
+    if(ADF7030_getState() != ADF7030_PHY_ON) {
+        ADF7030_transitionState(ADF7030_PHY_ON);
+    }
+
     union {
         uint32_t word;
         uint8_t arr[4];
@@ -325,21 +337,26 @@ TRANSCEIVER_ERR_e ADF7030_transmitPacket(data_packet_s *packet) {
     HAL_SPI_Transmit(transceiver.hspi, tx_data.arr, 130, transceiver.spi_timeout);
     HAL_GPIO_WritePin(transceiver.cs_port, transceiver.cs_pin, GPIO_PIN_SET);
 
-    ADF7030_transitionState(ADF7030_PHY_TX);
-    ADF7030_STATE_e currentState = ADF7030_getState();
-    
     union {
         uint8_t arr[4];
         uint32_t word;
     } err_u;
     err_u.word = 0;
-    ADF7030_memoryRead(MISC_FW_Addr, err_u.arr, 4);
+
+    //This register can be read to check that the packet was transmitted successfully. Clearing the flags before transmisstion
+    ADF7030_memoryRead(IRQ_CTRL_STATUS1_Addr, err_u.arr, 4);
+    err_u.word = err_u.word & 0x00000FFF;
+    ADF7030_memoryWrite(IRQ_CTRL_STATUS1_Addr, err_u.arr, 4);
+
+    ADF7030_transitionState(ADF7030_PHY_TX);
 
     // Switch the RF switch back to RX mode
     reg_data.word = 0x00000002;
     ADF7030_memoryWrite(ADF7030_GPIO_SET_REG, reg_data.arr, 4);
 
+    //This should read the pin to confirm that the packet has been transmitted. As this is currently not working, I will return to it to solve.
     uint32_t time = HAL_GetTick();
+    uint8_t pin = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_1);
     while(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_1) == GPIO_PIN_RESET) {
         ADF7030_STATE_e state = ADF7030_getState();
         // Wait for the packet to be transmitted
