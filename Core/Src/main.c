@@ -20,7 +20,9 @@
 #include "main.h"
 #include "cmsis_os.h"
 #include "adc.h"
+#include "dma.h"
 #include "spi.h"
+#include "tim.h"
 #include "usart.h"
 #include "usb_device.h"
 #include "gpio.h"
@@ -29,7 +31,8 @@
 /* USER CODE BEGIN Includes */
 #include "task.h"
 #include "transceiver.h"
-#include "queue.h"
+#include "temp_sensor.h"
+#include "potentiometer.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -39,26 +42,23 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define VOLTAGE_REF     3.3f
-#define ADC_RESOLUTION  4095.0f
-#define V_OFFSET        0.4f
-#define TEMP_COEFF      0.0195f
-#define T_INFLECTION    0.0f
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-
+#define ADC_NUM_CONVERSIONS 2
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
 data_packet_s receivedPacket;
-static uint8_t ADC_tracker = 0;
 
-QueueHandle_t temperatureQueue;
-QueueHandle_t potentiometerQueue;
+static uint16_t adc_data[ADC_NUM_CONVERSIONS];
+
+float current_temperature;
+float current_potentiometer_percentage;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -123,14 +123,6 @@ int main(void)
                               3,
                               &xADCSCommandHandle);
   
-  xSensorTaskReturned = xTaskCreate(
-                              vSensorTask,
-                              "Sensor",
-                              SENSOR_STACK_SIZE,
-                              NULL,
-                              4,
-                              &xSensorHandle);
-  
     
   /* USER CODE END Init */
 
@@ -143,9 +135,11 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_ADC1_Init();
   MX_USART1_Init();
   MX_SPI1_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 
   // Turn on XCVR power
@@ -155,9 +149,10 @@ int main(void)
 
 
   HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
-  HAL_ADC_Start(&hadc1);
-  temperatureQueue = xQueueCreate(10, sizeof(float));
-  potentiometerQueue = xQueueCreate(10, sizeof(float));
+  HAL_ADC_Start_DMA(&hadc1, (uint32_t *) adc_data, ADC_NUM_CONVERSIONS);
+
+  HAL_TIM_Base_Start(&htim3);
+
   ADF7030_transitionState(ADF7030_PHY_RX);
 
   data_packet_s test_packet = {
@@ -165,8 +160,8 @@ int main(void)
     .payload = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A},
     .length = 10
   };
-
   ADF7030_transmitPacket(&test_packet);
+
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -271,30 +266,17 @@ void vADCSCommandTask(void * pvParameters) {
   vTaskDelete(NULL);
 }
 
-void vSensorTask(void * pvParameters) {
-
-  for(;;) {
-    HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
-    uint32_t adc_value = HAL_ADC_GetValue(&hadc1);
-
-    if(ADC_tracker == 0) {
-      float temperature = (float)adc_value * (VOLTAGE_REF / ADC_RESOLUTION);
-      temperature = (temperature - V_OFFSET) / TEMP_COEFF + T_INFLECTION;
-      xQueueSendToBack(temperatureQueue, &temperature, 0);
-      ADC_tracker++;
-    } else {
-      float potentiometer = (float)adc_value * (VOLTAGE_REF / ADC_RESOLUTION);
-      xQueueSendToBack(potentiometerQueue, &potentiometer, 0);
-      ADC_tracker = 0;
-    }
-  }
-
-  vTaskDelete(NULL);
-}
-
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
   if(GPIO_Pin == GPIO_PIN_1) {
     ADF7030_receivePacket(&receivedPacket);
+  }
+}
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
+  if (hadc->Instance == ADC1) {
+    current_potentiometer_percentage = potentiometer_ADCToPercentage(adc_data[0]);
+    current_temperature = temp_sensor_ADCToTemperature(adc_data[1]);
+
   }
 }
 
