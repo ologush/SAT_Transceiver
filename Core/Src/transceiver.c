@@ -9,6 +9,8 @@ static TRANSCEIVER_ERR_e SPI_txrx(ADF7030_s *target, uint8_t *tx, uint8_t *rx, u
 static TRANSCEIVER_ERR_e SPI_tx(ADF7030_s *target, uint8_t *tx, uint16_t size);
 static TRANSCEIVER_ERR_e SPI_host_initialization(ADF7030_s *target, uint32_t timeout_ms);
 static TRANSCEIVER_ERR_e ADF7030_alignMultipleWords(uint8_t *data, uint32_t nwords, uint8_t *aligned_data);
+static TRANSCEIVER_ERR_e ADF7030_RFswitchTX(void);
+static TRANSCEIVER_ERR_e ADF7030_RFswitchRX(void);
 
 static uint32_t ADF7030_alignWord(uint32_t address);
 
@@ -108,8 +110,7 @@ TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, u
     ADF7030_memoryWrite(PROFILE_GPCON0_3_Addr, data.arr, 4);
     
     //Turn RF switch to TX mode so there is no interference during the calibration process
-    data.word = 0x00000002;
-    ADF7030_memoryWrite(ADF7030_GPIO_RESET_REG, data.arr, 4);
+    ADF7030_RFswitchTX();
 
 #ifdef CALIBRATE
     if(ADF7030_calibrate() != TRANSCEIVER_ERR_OK) {
@@ -127,8 +128,8 @@ TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, u
     ADF7030_radioSettings();
 
     // Set the RF switch back to RX mode and put the system in the RX state
-    data.word = 0x00000002;
-    ADF7030_memoryWrite(ADF7030_GPIO_SET_REG, data.arr, 4);
+    ADF7030_RFswitchRX();
+    ADF7030_transitionState(ADF7030_PHY_RX);
 
     return TRANSCEIVER_ERR_OK;
 
@@ -306,14 +307,7 @@ TRANSCEIVER_ERR_e ADF7030_transmitPacket(data_packet_s *packet) {
         ADF7030_transitionState(ADF7030_PHY_ON);
     }
 
-    union {
-        uint32_t word;
-        uint8_t arr[4];
-    } reg_data;
-    reg_data.word = 0x00000002;
-
-    // Set GPIO 1 low to put the RF switch in TX mode
-    ADF7030_memoryWrite(ADF7030_GPIO_RESET_REG, reg_data.arr, 4);
+    ADF7030_RFswitchTX();
 
     union {
         data_packet_s packet;
@@ -351,8 +345,7 @@ TRANSCEIVER_ERR_e ADF7030_transmitPacket(data_packet_s *packet) {
     ADF7030_transitionState(ADF7030_PHY_TX);
 
     // Switch the RF switch back to RX mode
-    reg_data.word = 0x00000002;
-    ADF7030_memoryWrite(ADF7030_GPIO_SET_REG, reg_data.arr, 4);
+    ADF7030_RFswitchRX();
 
     //This should read the pin to confirm that the packet has been transmitted. As this is currently not working, I will return to it to solve.
     uint32_t time = HAL_GetTick();
@@ -577,4 +570,30 @@ static TRANSCEIVER_ERR_e ADF7030_alignMultipleWords(uint8_t *data, uint32_t nwor
 
     return TRANSCEIVER_ERR_OK;
 
+}
+
+static TRANSCEIVER_ERR_e ADF7030_RFswitchTX(void) {
+
+    union {
+        uint32_t word;
+        uint8_t arr[4];
+    } reg_data;
+
+    reg_data.word = 0x00000002;
+    ADF7030_memoryWrite(ADF7030_GPIO_RESET_REG, reg_data.arr, 4);
+
+    return TRANSCEIVER_ERR_OK;
+}
+
+static TRANSCEIVER_ERR_e ADF7030_RFswitchRX(void) {
+
+    union {
+        uint32_t word;
+        uint8_t arr[4];
+    } reg_data;
+
+    reg_data.word = 0x00000002;
+    ADF7030_memoryWrite(ADF7030_GPIO_SET_REG, reg_data.arr, 4);
+
+    return TRANSCEIVER_ERR_OK;
 }
