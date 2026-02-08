@@ -2,6 +2,31 @@
 #include "adi_adf7030-1_reg.h"
 #include "gpio.h"
 
+#define CRC_LEN      1 //Byte
+#define SYNC_LEN     4 //Bytes
+#define SYNC_WORD    0xF0F0F0F0
+#define ENDEC_MODE   0x1
+#define PREAMBLE_VAL 0x55
+#define LEN_SEL      0x1
+#define CRC_SHIFT_IN_ZEROS 0x1
+#define IRQ1_TYPE   0x80
+#define IRQ0_TYPE   0x00
+#define PREAMBLE_UNIT 0x0
+#define PAYLOAD_SIZE 0x0
+#define CRC_SEED 0xAA
+#define CRC_POLY 0xFF
+#define CRC_FINAL_XOR 0xFF
+#define PACKET_LEN 128
+#define ROLLING_BUFF_EN 0x0
+#define BIT2AIR 0x0
+#define PTR_TX_BASE 0xAF0
+#define PTR_RX_BASE 0xBF0
+#define TURNAROUND_TX 0x1
+#define TURNAROUND_RX 0x0
+#define TX_BUFF_RAWDATA 0x0
+#define TRX_BLOCK_SIZE 0x0
+#define TX_SIZE 256
+#define RX_SIZE 256
 static ADF7030_s transceiver;
 static ADF7030_STATE_e transceiver_state;
 
@@ -342,7 +367,9 @@ TRANSCEIVER_ERR_e ADF7030_transmitPacket(data_packet_s *packet) {
     err_u.word = err_u.word & 0x00000FFF;
     ADF7030_memoryWrite(IRQ_CTRL_STATUS1_Addr, err_u.arr, 4);
 
-    ADF7030_transitionState(ADF7030_PHY_TX);
+    ADF7030_transitionState(ADF7030_CCA);
+    ADF7030_STATE_e state = ADF7030_getState();
+    //ADF7030_transitionState(ADF7030_PHY_TX);
 
     // Switch the RF switch back to RX mode
     ADF7030_RFswitchRX();
@@ -369,45 +396,45 @@ TRANSCEIVER_ERR_e ADF7030_radioSettings() {
 
     ADF7030_memoryRead(GENERIC_PKT_FRAME_CFG0_Addr, reg_data_u.arr, 4);
 
-    //32 bit sync, CRC len is 8
-    reg_data_u.word = (reg_data_u.word & 0xC0C0FFFF) | 0x08200000;
+    //32 bit sync, CRC len is 8 bits
+    reg_data_u.word = (reg_data_u.word & 0xC0C0FFFF) | 0x00200000 | ((0x8 * CRC_LEN) << 24) | ((SYNC_LEN * 8) << 16);
     ADF7030_memoryWrite(GENERIC_PKT_FRAME_CFG0_Addr, reg_data_u.arr, 4);
-    reg_data_u.word = 0xF0F0F0F0;
+    reg_data_u.word = SYNC_WORD;
     ADF7030_memoryWrite(GENERIC_PKT_SYNCWORD0_Addr, reg_data_u.arr, 4);
 
 
     ADF7030_memoryRead(GENERIC_PKT_FRAME_CFG2_Addr, reg_data_u.arr, 4);
     //Len set to 8 bits, need to add the ENDEC_MODE, CRC_SHIFT_IN_ZEROS is set to 1
-    reg_data_u.word = (reg_data_u.word & 0x00FFCFFF) | 0x01001800;
+    reg_data_u.word = (reg_data_u.word & 0x00FFCFFF) | (ENDEC_MODE << 24) | (PREAMBLE_VAL << 16) | (LEN_SEL << 12) | (CRC_SHIFT_IN_ZEROS << 11);
     ADF7030_memoryWrite(GENERIC_PKT_FRAME_CFG2_Addr, reg_data_u.arr, 4);
 
 
     ADF7030_memoryRead(GENERIC_PKT_FRAME_CFG1_Addr, reg_data_u.arr, 4);
     //Enable IRQ1 when full packet has been rx or tx, no irq0, inherit length setting from config
-    reg_data_u.word = (reg_data_u.word & 0x0000FFFF) | 0x80000000;
+    reg_data_u.word = (reg_data_u.word & 0x0000FFFF) | (IRQ1_TYPE << 24) | (IRQ0_TYPE << 16) | (PREAMBLE_UNIT << 12) | (PAYLOAD_SIZE);
     ADF7030_memoryWrite(GENERIC_PKT_FRAME_CFG1_Addr, reg_data_u.arr, 4);
 
     //Set the CRC seed as 0xAA
-    reg_data_u.word = 0x000000AA;
+    reg_data_u.word = CRC_SEED;
     ADF7030_memoryWrite(GENERIC_PKT_CRC_SEED_Addr, reg_data_u.arr, 4);  
 
     //Set the CRC polynomial as 0xFF
-    reg_data_u.word = 0x000000FF;
+    reg_data_u.word = CRC_POLY;
     ADF7030_memoryWrite(GENERIC_PKT_CRC_POLY_Addr, reg_data_u.arr, 4);
 
     //Final XOR of the CRC calculation
-    reg_data_u.word = 0x000000FF;
+    reg_data_u.word = CRC_FINAL_XOR;
     ADF7030_memoryWrite(GENERIC_PKT_CRC_FINAL_XOR_Addr, reg_data_u.arr, 4);
 
     //TX base offset pointer: AF0, RX base offset pointer: BF0
     ADF7030_memoryRead(GENERIC_PKT_BUFF_CFG0_Addr, reg_data_u.arr, 4);
-    reg_data_u.word = (reg_data_u.word & 0xFE800000) | 0x000AF2FC;
+    reg_data_u.word = (reg_data_u.word & 0xFE800000) | (ROLLING_BUFF_EN << 24) | (BIT2AIR << 22) | ((PTR_TX_BASE / 4) << 11) | (PTR_RX_BASE / 4);
     ADF7030_memoryWrite(GENERIC_PKT_BUFF_CFG0_Addr, reg_data_u.arr, 4);
 
 
     ADF7030_memoryRead(GENERIC_PKT_BUFF_CFG1_Addr, reg_data_u.arr, 4);
     //TX_SIZE 256, RX_SIZE 256, autoturnaround TX to RX
-    reg_data_u.word = (reg_data_u.word & 0x54000000) | 0x80020100;
+    reg_data_u.word = (reg_data_u.word & 0x54000000) | (TURNAROUND_TX << 31) | (TURNAROUND_RX << 29) | (TX_BUFF_RAWDATA << 27) | (TRX_BLOCK_SIZE << 18) | (TX_SIZE << 9) | (RX_SIZE);
     ADF7030_memoryWrite(GENERIC_PKT_BUFF_CFG1_Addr, reg_data_u.arr, 4);
 
     return TRANSCEIVER_ERR_OK;

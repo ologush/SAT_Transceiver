@@ -160,7 +160,10 @@ int main(void)
     .payload = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A},
     .length = 10
   };
+
+  data_packet_s receivedPacket;
   ADF7030_transmitPacket(&test_packet);
+  //ADF7030_receivePacket(&receivedPacket);
 
   /* USER CODE END 2 */
 
