@@ -160,7 +160,6 @@ int main(void)
     .payload = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A},
     .length = 10
   };
-
   ADF7030_transmitPacket(&test_packet);
 
   /* USER CODE END 2 */
@@ -275,8 +274,9 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
   if (hadc->Instance == ADC1) {
-    current_temperature = temp_sensor_ADCToTemperature(adc_data[0]);
-    current_potentiometer_percentage = potentiometer_ADCToPercentage(adc_data[1]);
+    current_potentiometer_percentage = potentiometer_ADCToPercentage(adc_data[0]);
+    current_temperature = temp_sensor_ADCToTemperature(adc_data[1]);
+
   }
 }
 
