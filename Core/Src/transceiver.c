@@ -12,7 +12,7 @@
 #define IRQ1_TYPE   0x80
 #define IRQ0_TYPE   0x00
 #define PREAMBLE_UNIT 0x0
-#define PAYLOAD_SIZE 0x0
+#define PAYLOAD_SIZE 130
 #define CRC_SEED 0xAA
 #define CRC_POLY 0xFF
 #define CRC_FINAL_XOR 0xFF
@@ -27,6 +27,9 @@
 #define TRX_BLOCK_SIZE 0x0
 #define TX_SIZE 256
 #define RX_SIZE 256
+#define GPIO1_CFG 0x19
+#define GPIO4_CFG 0x7
+
 static ADF7030_s transceiver;
 static ADF7030_STATE_e transceiver_state;
 
@@ -131,8 +134,14 @@ TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, u
     ADF7030_memoryWrite(PROFILE_LPM_CFG0_Addr, data.arr, 4);
 
     //Set GPIO 1 to output to set the RF switch
-    data.word = 0x00001900;
+    data.word = GPIO1_CFG << 8;
     ADF7030_memoryWrite(PROFILE_GPCON0_3_Addr, data.arr, 4);
+
+    //Set GPIO 4 to IRQ1 output
+    data.word = GPIO4_CFG;
+    ADF7030_memoryWrite(PROFILE_GPCON4_7_Addr, data.arr, 4);
+
+    ADF7030_transitionState(ADF7030_CFG_DEV);
     
     //Turn RF switch to TX mode so there is no interference during the calibration process
     ADF7030_RFswitchTX();
@@ -146,9 +155,7 @@ TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, u
 #endif
 
     ADF7030_transitionState(ADF7030_PHY_OFF);
-    //Set GPIO 4 to IRQ1 output
-    data.word = 0x0000001C;
-    ADF7030_memoryWrite(PROFILE_GPCON4_7_Addr, data.arr, 4);
+
 
     ADF7030_radioSettings();
 
@@ -367,23 +374,26 @@ TRANSCEIVER_ERR_e ADF7030_transmitPacket(data_packet_s *packet) {
     err_u.word = err_u.word & 0x00000FFF;
     ADF7030_memoryWrite(IRQ_CTRL_STATUS1_Addr, err_u.arr, 4);
 
-    ADF7030_transitionState(ADF7030_CCA);
+    //ADF7030_transitionState(ADF7030_CCA);
+    
+    ADF7030_transitionState(ADF7030_PHY_TX);
     ADF7030_STATE_e state = ADF7030_getState();
-    //ADF7030_transitionState(ADF7030_PHY_TX);
-
     // Switch the RF switch back to RX mode
     ADF7030_RFswitchRX();
 
     //This should read the pin to confirm that the packet has been transmitted. As this is currently not working, I will return to it to solve.
+
     uint32_t time = HAL_GetTick();
-    uint8_t pin = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_1);
     while(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_1) == GPIO_PIN_RESET) {
-        ADF7030_STATE_e state = ADF7030_getState();
         // Wait for the packet to be transmitted
         if (HAL_GetTick() - time > TRANSITION_TIMEOUT) {
             return TRANSCEIVER_ERR_ERROR;
         }
     }
+
+    ADF7030_memoryRead(IRQ_CTRL_STATUS1_Addr, err_u.arr, 4);
+    err_u.word = err_u.word & 0x00000FFF;
+
     return TRANSCEIVER_ERR_OK;
 }
 
@@ -401,7 +411,6 @@ TRANSCEIVER_ERR_e ADF7030_radioSettings() {
     ADF7030_memoryWrite(GENERIC_PKT_FRAME_CFG0_Addr, reg_data_u.arr, 4);
     reg_data_u.word = SYNC_WORD;
     ADF7030_memoryWrite(GENERIC_PKT_SYNCWORD0_Addr, reg_data_u.arr, 4);
-
 
     ADF7030_memoryRead(GENERIC_PKT_FRAME_CFG2_Addr, reg_data_u.arr, 4);
     //Len set to 8 bits, need to add the ENDEC_MODE, CRC_SHIFT_IN_ZEROS is set to 1
@@ -624,3 +633,4 @@ static TRANSCEIVER_ERR_e ADF7030_RFswitchRX(void) {
 
     return TRANSCEIVER_ERR_OK;
 }
+
