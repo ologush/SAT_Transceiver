@@ -110,6 +110,7 @@ TRANSCEIVER_ERR_e ADF7030_getTemperature(float *temp);
 TRANSCEIVER_ERR_e ADF7030_memoryWrite(uint32_t address, uint8_t *data, uint32_t nbytes);
 TRANSCEIVER_ERR_e ADF7030_memoryRead(uint32_t address, uint8_t *data, uint32_t nbytes);
 TRANSCEIVER_ERR_e ADF7030_radioSettings(void);
+TRANSCEIVER_ERR_e ADF7030_performCCA(void);
 
 ADF7030_STATE_e ADF7030_getState(void);
 

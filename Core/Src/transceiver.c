@@ -2,20 +2,20 @@
 #include "adi_adf7030-1_reg.h"
 #include "gpio.h"
 
-#define CRC_LEN      1 //Byte
-#define SYNC_LEN     4 //Bytes
-#define SYNC_WORD    0xF0F0F0F0
-#define ENDEC_MODE   0x1
+#define CRC_LEN      2 //Byte
+#define SYNC_LEN     2 //Bytes
+#define SYNC_WORD    0xF672
+#define ENDEC_MODE   0x0
 #define PREAMBLE_VAL 0x55
 #define LEN_SEL      0x1
 #define CRC_SHIFT_IN_ZEROS 0x1
 #define IRQ1_TYPE   0x80
 #define IRQ0_TYPE   0x00
-#define PREAMBLE_UNIT 0x0
-#define PAYLOAD_SIZE 130
-#define CRC_SEED 0xAA
-#define CRC_POLY 0xFF
-#define CRC_FINAL_XOR 0xFF
+#define PREAMBLE_UNIT 0x1
+#define PAYLOAD_SIZE 23
+#define CRC_SEED 0x0
+#define CRC_POLY 0x3D65
+#define CRC_FINAL_XOR 0xFFFF
 #define PACKET_LEN 128
 #define ROLLING_BUFF_EN 0x0
 #define BIT2AIR 0x0
@@ -30,6 +30,11 @@
 #define GPIO1_CFG 0x19
 #define GPIO4_CFG 0x7
 
+#define CCA_THRESHOLD 0xFF
+#define CCA_DETECTION_TIME 0xFF
+#define CCA_TICK_POSTSCALER 0xF
+#define CCA_TICK_RATE 0x8
+
 static ADF7030_s transceiver;
 static ADF7030_STATE_e transceiver_state;
 
@@ -39,6 +44,7 @@ static TRANSCEIVER_ERR_e SPI_host_initialization(ADF7030_s *target, uint32_t tim
 static TRANSCEIVER_ERR_e ADF7030_alignMultipleWords(uint8_t *data, uint32_t nwords, uint8_t *aligned_data);
 static TRANSCEIVER_ERR_e ADF7030_RFswitchTX(void);
 static TRANSCEIVER_ERR_e ADF7030_RFswitchRX(void);
+static TRANSCEIVER_ERR_e ADF7030_configureCCA(void);
 
 static uint32_t ADF7030_alignWord(uint32_t address);
 
@@ -159,8 +165,11 @@ TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, u
 
     ADF7030_radioSettings();
 
+    ADF7030_configureCCA();
+
     // Set the RF switch back to RX mode and put the system in the RX state
     ADF7030_RFswitchRX();
+
     ADF7030_transitionState(ADF7030_PHY_RX);
 
     return TRANSCEIVER_ERR_OK;
@@ -339,7 +348,7 @@ TRANSCEIVER_ERR_e ADF7030_transmitPacket(data_packet_s *packet) {
         ADF7030_transitionState(ADF7030_PHY_ON);
     }
 
-    ADF7030_RFswitchTX();
+    
 
     union {
         data_packet_s packet;
@@ -375,9 +384,11 @@ TRANSCEIVER_ERR_e ADF7030_transmitPacket(data_packet_s *packet) {
     ADF7030_memoryWrite(IRQ_CTRL_STATUS1_Addr, err_u.arr, 4);
 
     //ADF7030_transitionState(ADF7030_CCA);
-    
+    ADF7030_RFswitchTX();
+    ADF7030_performCCA();
+    ADF7030_RFswitchTX();
     ADF7030_transitionState(ADF7030_PHY_TX);
-    ADF7030_STATE_e state = ADF7030_getState();
+    HAL_Delay(100);
     // Switch the RF switch back to RX mode
     ADF7030_RFswitchRX();
 
@@ -393,7 +404,8 @@ TRANSCEIVER_ERR_e ADF7030_transmitPacket(data_packet_s *packet) {
 
     ADF7030_memoryRead(IRQ_CTRL_STATUS1_Addr, err_u.arr, 4);
     err_u.word = err_u.word & 0x00000FFF;
-
+    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_12);
+    ADF7030_memoryRead(MISC_FW_Addr, err_u.arr, 4);
     return TRANSCEIVER_ERR_OK;
 }
 
@@ -423,13 +435,14 @@ TRANSCEIVER_ERR_e ADF7030_radioSettings() {
     reg_data_u.word = (reg_data_u.word & 0x0000FFFF) | (IRQ1_TYPE << 24) | (IRQ0_TYPE << 16) | (PREAMBLE_UNIT << 12) | (PAYLOAD_SIZE);
     ADF7030_memoryWrite(GENERIC_PKT_FRAME_CFG1_Addr, reg_data_u.arr, 4);
 
-    //Set the CRC seed as 0xAA
+    //Set the CRC seed as 0x0
     reg_data_u.word = CRC_SEED;
     ADF7030_memoryWrite(GENERIC_PKT_CRC_SEED_Addr, reg_data_u.arr, 4);  
 
-    //Set the CRC polynomial as 0xFF
+    //Set the CRC polynomial as 0x3D65
     reg_data_u.word = CRC_POLY;
     ADF7030_memoryWrite(GENERIC_PKT_CRC_POLY_Addr, reg_data_u.arr, 4);
+
 
     //Final XOR of the CRC calculation
     reg_data_u.word = CRC_FINAL_XOR;
@@ -440,11 +453,29 @@ TRANSCEIVER_ERR_e ADF7030_radioSettings() {
     reg_data_u.word = (reg_data_u.word & 0xFE800000) | (ROLLING_BUFF_EN << 24) | (BIT2AIR << 22) | ((PTR_TX_BASE / 4) << 11) | (PTR_RX_BASE / 4);
     ADF7030_memoryWrite(GENERIC_PKT_BUFF_CFG0_Addr, reg_data_u.arr, 4);
 
+    //Clear packet memory
+    uint8_t rx_clr_buffer[PAYLOAD_SIZE] = {0};
+    ADF7030_memoryWrite(RX_PACKET_MEMORY, rx_clr_buffer, PAYLOAD_SIZE);
+
+
 
     ADF7030_memoryRead(GENERIC_PKT_BUFF_CFG1_Addr, reg_data_u.arr, 4);
     //TX_SIZE 256, RX_SIZE 256, autoturnaround TX to RX
     reg_data_u.word = (reg_data_u.word & 0x54000000) | (TURNAROUND_TX << 31) | (TURNAROUND_RX << 29) | (TX_BUFF_RAWDATA << 27) | (TRX_BLOCK_SIZE << 18) | (TX_SIZE << 9) | (RX_SIZE);
     ADF7030_memoryWrite(GENERIC_PKT_BUFF_CFG1_Addr, reg_data_u.arr, 4);
+
+    ADF7030_memoryRead(PROFILE_PACKET_CFG_Addr, reg_data_u.arr, 4);
+
+    //Currently in wideband mode
+    ADF7030_memoryRead(PROFILE_RADIO_MODES_Addr, reg_data_u.arr, 4);
+    //Power settings
+    ADF7030_memoryRead(PROFILE_RADIO_DIG_TX_CFG0_Addr, reg_data_u.arr, 4);
+
+    ADF7030_memoryRead(PROFILE_RADIO_DIG_TX_CFG1_Addr, reg_data_u.arr, 4);
+    //LDO
+    ADF7030_memoryRead(PROFILE_RADIO_DIG_TX_CFG2_Addr, reg_data_u.arr, 4);
+
+    ADF7030_memoryRead(PROFILE_RADIO_AFC_CFG2_Addr, reg_data_u.arr, 4);
 
     return TRANSCEIVER_ERR_OK;
 
@@ -458,12 +489,13 @@ TRANSCEIVER_ERR_e ADF7030_receivePacket(data_packet_s *packet) {
     } rx_data;
 
     rx_data.rx_packet = packet;
-    ADF7030_memoryRead(RX_PACKET_MEMORY, rx_data.arr, 130);
+    ADF7030_memoryRead(RX_PACKET_MEMORY, rx_data.arr, PAYLOAD_SIZE);
 
     union {
         uint8_t arr[4];
         uint32_t word;
     } reg_data_u;
+    reg_data_u.word = 0;
 
     // Clear the IRQ0 flag for packet received
     ADF7030_memoryRead(IRQ_CTRL_STATUS1_Addr, reg_data_u.arr, 4);
@@ -571,9 +603,7 @@ TRANSCEIVER_ERR_e ADF7030_memoryRead(uint32_t address, uint8_t *data, uint32_t n
     HAL_SPI_Receive(transceiver.hspi, unaligned_data_arr, nbytes, transceiver.spi_timeout);
     HAL_GPIO_WritePin(transceiver.cs_port, transceiver.cs_pin, GPIO_PIN_SET);
 
-    for(uint32_t i = 0; i < nbytes; i++) {
-        data[i] = unaligned_data_arr[nbytes - i - 1];
-    }
+    ADF7030_alignMultipleWords(unaligned_data_arr, nbytes / 4, data);
 
     return TRANSCEIVER_ERR_OK;
 
@@ -616,7 +646,7 @@ static TRANSCEIVER_ERR_e ADF7030_RFswitchTX(void) {
     } reg_data;
 
     reg_data.word = 0x00000002;
-    ADF7030_memoryWrite(ADF7030_GPIO_RESET_REG, reg_data.arr, 4);
+    ADF7030_memoryWrite(ADF7030_GPIO_SET_REG, reg_data.arr, 4);
 
     return TRANSCEIVER_ERR_OK;
 }
@@ -629,8 +659,43 @@ static TRANSCEIVER_ERR_e ADF7030_RFswitchRX(void) {
     } reg_data;
 
     reg_data.word = 0x00000002;
-    ADF7030_memoryWrite(ADF7030_GPIO_SET_REG, reg_data.arr, 4);
+    ADF7030_memoryWrite(ADF7030_GPIO_RESET_REG, reg_data.arr, 4);
 
     return TRANSCEIVER_ERR_OK;
 }
 
+TRANSCEIVER_ERR_e ADF7030_performCCA(void) {
+
+    ADF7030_transitionState(ADF7030_CCA);
+
+    ADF7030_TRANSITION_STATUS_e status = ADF7030_getTransitionStatus();
+
+    //while(ADF7030_getTransitionStatus() != ADF7030_IDLE_IN_STATE);
+
+    ADF7030_STATE_e state = ADF7030_getState();
+
+    union {
+        uint32_t word;
+        uint8_t arr[4];
+    } reg_data;
+
+    ADF7030_memoryRead(PROFILE_CCA_READBACK_Addr, reg_data.arr, 4);
+
+    if(status == ADF7030_PHY_ON) {
+        return TRANSCEIVER_ERR_ERROR;
+    }
+}
+
+static TRANSCEIVER_ERR_e ADF7030_configureCCA(void) {
+
+    union {
+        uint32_t word;
+        uint8_t arr[4];
+    } reg_data;
+
+    ADF7030_memoryRead(PROFILE_CCA_CFG_Addr, reg_data.arr, 4);
+
+    reg_data.word = (reg_data.word & 0xF8000000) | (CCA_THRESHOLD << 16) | (CCA_DETECTION_TIME << 8) | (CCA_TICK_POSTSCALER << 4) | CCA_TICK_RATE;
+
+    ADF7030_memoryWrite(PROFILE_CCA_CFG_Addr, reg_data.arr, 4);
+}

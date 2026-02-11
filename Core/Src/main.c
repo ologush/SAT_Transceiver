@@ -153,7 +153,7 @@ int main(void)
 
   HAL_TIM_Base_Start(&htim3);
 
-  ADF7030_transitionState(ADF7030_PHY_RX);
+
 
   data_packet_s test_packet = {
     .header = 0xAB,
@@ -162,8 +162,13 @@ int main(void)
   };
 
   data_packet_s receivedPacket;
+
+  // while (1) {
+  //   ADF7030_transmitPacket(&test_packet);
+  //   HAL_Delay(1000);
+  // }
   ADF7030_transmitPacket(&test_packet);
-  //ADF7030_receivePacket(&receivedPacket);
+  ADF7030_receivePacket(&receivedPacket);
 
   /* USER CODE END 2 */
 
