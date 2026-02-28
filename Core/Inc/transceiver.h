@@ -111,6 +111,9 @@ TRANSCEIVER_ERR_e ADF7030_memoryWrite(uint32_t address, uint8_t *data, uint32_t 
 TRANSCEIVER_ERR_e ADF7030_memoryRead(uint32_t address, uint8_t *data, uint32_t nbytes);
 TRANSCEIVER_ERR_e ADF7030_radioSettings(void);
 TRANSCEIVER_ERR_e ADF7030_performCCA(void);
+TRANSCEIVER_ERR_e ADF7030_startContinuousRSSIMeasurement(void);
+TRANSCEIVER_ERR_e ADF7030_endContinuousRSSIMeasurement(void);
+TRANSCEIVER_ERR_e ADF7030_getRSSI(float *RSSI_val);
 
 ADF7030_STATE_e ADF7030_getState(void);
 

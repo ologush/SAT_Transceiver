@@ -699,3 +699,52 @@ static TRANSCEIVER_ERR_e ADF7030_configureCCA(void) {
 
     ADF7030_memoryWrite(PROFILE_CCA_CFG_Addr, reg_data.arr, 4);
 }
+
+TRANSCEIVER_ERR_e ADF7030_startContinuousRSSIMeasurement(void) {
+
+    union {
+        uint8_t arr[4];
+        uint32_t word;
+    } reg_data;
+
+    ADF7030_memoryRead(PROFILE_CCA_CFG_Addr, reg_data.arr, 4);
+
+    reg_data.word &= 0xFFFF00FF;
+
+    ADF7030_memoryWrite(PROFILE_CCA_CFG_Addr, reg_data.arr, 4);
+
+    ADF7030_transitionState(ADF7030_CCA);
+
+}
+
+TRANSCEIVER_ERR_e ADF7030_endContinuousRSSIMeasurement(void) {
+
+    ADF7030_transitionState(ADF7030_PHY_ON);
+
+}
+
+TRANSCEIVER_ERR_e ADF7030_getRSSI(float *RSSI_val) {
+
+    if (ADF7030_getState() != ADF7030_CCA) {
+        return TRANSCEIVER_ERR_ERROR;
+    }
+
+    union {
+        uint8_t arr[4];
+        uint32_t word;
+        int32_t s_word;
+    } reg_data;
+
+    ADF7030_memoryRead(PROFILE_CCA_READBACK_Addr, reg_data.arr, 4);
+
+    reg_data.word &= 0x7FF;
+
+    if (reg_data.word & 0x400) {
+        reg_data.word |= 0xFFFFFF800;
+    }
+
+    *RSSI_val = (float)(reg_data.s_word * 0.25f);
+
+    return TRANSCEIVER_ERR_OK;
+
+}
