@@ -3,15 +3,16 @@
 #include "gpio.h"
 
 #define CRC_LEN      2 //Byte
-#define SYNC_LEN     2 //Bytes
-#define SYNC_WORD    0xF672
-#define ENDEC_MODE   0x0
+#define SYNC_LEN     1 //Bytes
+#define SYNC_WORD    0x000000A7
+#define ENDEC_MODE   0x1
 #define PREAMBLE_VAL 0x55
 #define LEN_SEL      0x1
 #define CRC_SHIFT_IN_ZEROS 0x1
 #define IRQ1_TYPE   0x80
 #define IRQ0_TYPE   0x00
 #define PREAMBLE_UNIT 0x1
+#define PREAMBLE_LEN 0x4
 #define PAYLOAD_SIZE 23
 #define CRC_SEED 0x0
 #define CRC_POLY 0x3D65
@@ -165,10 +166,11 @@ TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, u
 
     ADF7030_radioSettings();
 
-    ADF7030_configureCCA();
+    //ADF7030_configureCCA();
 
     // Set the RF switch back to RX mode and put the system in the RX state
     ADF7030_RFswitchRX();
+    ADF7030_transitionState(ADF7030_PHY_ON);
 
     ADF7030_transitionState(ADF7030_PHY_RX);
 
@@ -384,13 +386,13 @@ TRANSCEIVER_ERR_e ADF7030_transmitPacket(data_packet_s *packet) {
     ADF7030_memoryWrite(IRQ_CTRL_STATUS1_Addr, err_u.arr, 4);
 
     //ADF7030_transitionState(ADF7030_CCA);
-    ADF7030_RFswitchTX();
-    ADF7030_performCCA();
+    // ADF7030_RFswitchTX();
+    // ADF7030_performCCA();
     ADF7030_RFswitchTX();
     ADF7030_transitionState(ADF7030_PHY_TX);
-    HAL_Delay(100);
+    //HAL_Delay(100);
     // Switch the RF switch back to RX mode
-    ADF7030_RFswitchRX();
+
 
     //This should read the pin to confirm that the packet has been transmitted. As this is currently not working, I will return to it to solve.
 
@@ -401,9 +403,10 @@ TRANSCEIVER_ERR_e ADF7030_transmitPacket(data_packet_s *packet) {
             return TRANSCEIVER_ERR_ERROR;
         }
     }
-
+    ADF7030_RFswitchRX();
     ADF7030_memoryRead(IRQ_CTRL_STATUS1_Addr, err_u.arr, 4);
     err_u.word = err_u.word & 0x00000FFF;
+    ADF7030_memoryWrite(IRQ_CTRL_STATUS1_Addr, err_u.arr, 4);
     HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_12);
     ADF7030_memoryRead(MISC_FW_Addr, err_u.arr, 4);
     return TRANSCEIVER_ERR_OK;
@@ -419,7 +422,7 @@ TRANSCEIVER_ERR_e ADF7030_radioSettings() {
     ADF7030_memoryRead(GENERIC_PKT_FRAME_CFG0_Addr, reg_data_u.arr, 4);
 
     //32 bit sync, CRC len is 8 bits
-    reg_data_u.word = (reg_data_u.word & 0xC0C0FFFF) | 0x00200000 | ((0x8 * CRC_LEN) << 24) | ((SYNC_LEN * 8) << 16);
+    reg_data_u.word = (reg_data_u.word & 0xC0C0FF00) | ((0x8 * CRC_LEN) << 24) | ((SYNC_LEN * 8) << 16) | PREAMBLE_LEN;
     ADF7030_memoryWrite(GENERIC_PKT_FRAME_CFG0_Addr, reg_data_u.arr, 4);
     reg_data_u.word = SYNC_WORD;
     ADF7030_memoryWrite(GENERIC_PKT_SYNCWORD0_Addr, reg_data_u.arr, 4);
@@ -499,9 +502,11 @@ TRANSCEIVER_ERR_e ADF7030_receivePacket(data_packet_s *packet) {
 
     // Clear the IRQ0 flag for packet received
     ADF7030_memoryRead(IRQ_CTRL_STATUS1_Addr, reg_data_u.arr, 4);
-    reg_data_u.word = reg_data_u.word | 0x00000080;
+    ADF7030_memoryRead(IRQ_CTRL_STATUS0_Addr, reg_data_u.arr, 4);
+    reg_data_u.word = reg_data_u.word & 0x00000FFF;
     ADF7030_memoryWrite(IRQ_CTRL_STATUS1_Addr, reg_data_u.arr, 4);
-
+    ADF7030_memoryWrite(IRQ_CTRL_STATUS0_Addr, reg_data_u.arr, 4);
+    ADF7030_transitionState(ADF7030_PHY_RX);
     return TRANSCEIVER_ERR_OK;
 }
 

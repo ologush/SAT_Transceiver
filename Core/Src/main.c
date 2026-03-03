@@ -33,6 +33,8 @@
 #include "transceiver.h"
 #include "temp_sensor.h"
 #include "potentiometer.h"
+#include "usbd_cdc_if.h"
+#include "__public__ADF7030_1_fw_macro.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -65,7 +67,7 @@ float current_potentiometer_percentage;
 void SystemClock_Config(void);
 void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN PFP */
-
+static void printRSSI(float RSSI_data);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -141,7 +143,7 @@ int main(void)
   MX_SPI1_Init();
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
-
+  MX_USB_DEVICE_Init();
   // Turn on XCVR power
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, GPIO_PIN_SET);
 
@@ -163,12 +165,35 @@ int main(void)
 
   data_packet_s receivedPacket;
 
+  union {
+    uint8_t arr[4];
+    uint32_t word;
+  } reg_data;
+
+
+
   // while (1) {
   //   ADF7030_transmitPacket(&test_packet);
-  //   HAL_Delay(1000);
+  //   HAL_Delay(500);
   // }
-  ADF7030_transmitPacket(&test_packet);
-  ADF7030_receivePacket(&receivedPacket);
+  ADF7030_STATE_e current_state = ADF7030_getState();
+
+  // ADF7030_transitionState(ADF7030_PHY_ON);
+  // ADF7030_startContinuousRSSIMeasurement();
+
+  // float RSSI_data;
+  // while (1) {
+  //   ADF7030_getRSSI(&RSSI_data);
+  //   printRSSI(RSSI_data);
+  //   HAL_Delay(100);
+  // }
+  // ADF7030_endContinuousRSSIMeasurement();
+  // ADF7030_transmitPacket(&test_packet);
+  ADF7030_memoryRead(PROFILE_PACKET_CFG_Addr, reg_data.arr, 4);
+  while (1) {
+    ADF7030_receivePacket(&receivedPacket);
+  }
+
 
   /* USER CODE END 2 */
 
@@ -286,6 +311,16 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
     current_temperature = temp_sensor_ADCToTemperature(adc_data[1]);
 
   }
+}
+
+static void printRSSI(float RSSI_data) {
+
+  char buffer[50];
+
+  uint32_t size = snprintf(buffer, sizeof(buffer), "RSSI: %.4f \r\n", RSSI_data);
+
+  CDC_Transmit_FS(buffer, size);
+
 }
 
 /* USER CODE END 4 */
