@@ -67,7 +67,7 @@ float current_potentiometer_percentage;
 void SystemClock_Config(void);
 void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN PFP */
-static void printRSSI(float RSSI_data);
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -291,16 +291,6 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
     current_temperature = temp_sensor_ADCToTemperature(adc_data[1]);
 
   }
-}
-
-static void printRSSI(float RSSI_data) {
-
-  char buffer[50];
-
-  uint32_t size = snprintf(buffer, sizeof(buffer), "RSSI: %.4f \r\n", RSSI_data);
-
-  CDC_Transmit_FS(buffer, size);
-
 }
 
 /* USER CODE END 4 */

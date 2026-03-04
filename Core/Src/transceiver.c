@@ -48,7 +48,6 @@ static TRANSCEIVER_ERR_e SPI_host_initialization(ADF7030_s *target, uint32_t tim
 static TRANSCEIVER_ERR_e ADF7030_alignMultipleWords(uint8_t *data, uint32_t nwords, uint8_t *aligned_data);
 static TRANSCEIVER_ERR_e ADF7030_RFswitchTX(void);
 static TRANSCEIVER_ERR_e ADF7030_RFswitchRX(void);
-static TRANSCEIVER_ERR_e ADF7030_configureCCA(void);
 
 static uint32_t ADF7030_alignWord(uint32_t address);
 
@@ -358,7 +357,7 @@ TRANSCEIVER_ERR_e ADF7030_transmitPacket(data_packet_s *packet) {
 
     // Set the packet length
     ADF7030_memoryRead(GENERIC_PKT_FRAME_CFG1_Addr, reg_data_u.arr, 4);
-    reg_data_u.word = reg_data_u.word & 0xFFFFF000 | packet->length;
+    reg_data_u.word = (reg_data_u.word & 0xFFFFF000) | packet->length;
     ADF7030_memoryWrite(GENERIC_PKT_FRAME_CFG1_Addr, reg_data_u.arr, 4);
 
     // Write the packet to the TX buffer
@@ -442,8 +441,6 @@ TRANSCEIVER_ERR_e ADF7030_radioSettings() {
     //Clear packet memory
     uint8_t rx_clr_buffer[PAYLOAD_SIZE] = {0};
     ADF7030_memoryWrite(RX_PACKET_MEMORY, rx_clr_buffer, PAYLOAD_SIZE);
-
-
 
     ADF7030_memoryRead(GENERIC_PKT_BUFF_CFG1_Addr, reg_data_u.arr, 4);
     //TX_SIZE 256, RX_SIZE 256, autoturnaround TX to RX
@@ -677,13 +674,10 @@ static TRANSCEIVER_ERR_e ADF7030_RFswitchRX(void) {
     return TRANSCEIVER_ERR_OK;
 }
 
+// CCA functions still need to be tested
 TRANSCEIVER_ERR_e ADF7030_performCCA(void) {
 
     ADF7030_transitionState(ADF7030_CCA);
-
-    ADF7030_TRANSITION_STATUS_e status = ADF7030_getTransitionStatus();
-
-    //while(ADF7030_getTransitionStatus() != ADF7030_IDLE_IN_STATE);
 
     ADF7030_STATE_e state = ADF7030_getState();
 
@@ -694,9 +688,11 @@ TRANSCEIVER_ERR_e ADF7030_performCCA(void) {
 
     ADF7030_memoryRead(PROFILE_CCA_READBACK_Addr, reg_data.arr, 4);
 
-    if(status == ADF7030_PHY_ON) {
+    if(state == ADF7030_PHY_ON) {
         return TRANSCEIVER_ERR_ERROR;
     }
+
+    return TRANSCEIVER_ERR_OK;
 }
 
 static TRANSCEIVER_ERR_e ADF7030_configureCCA(void) {
@@ -711,6 +707,8 @@ static TRANSCEIVER_ERR_e ADF7030_configureCCA(void) {
     reg_data.word = (reg_data.word & 0xF8000000) | (CCA_THRESHOLD << 16) | (CCA_DETECTION_TIME << 8) | (CCA_TICK_POSTSCALER << 4) | CCA_TICK_RATE;
 
     ADF7030_memoryWrite(PROFILE_CCA_CFG_Addr, reg_data.arr, 4);
+
+    return TRANSCEIVER_ERR_OK;
 }
 
 TRANSCEIVER_ERR_e ADF7030_startContinuousRSSIMeasurement(void) {
@@ -728,11 +726,14 @@ TRANSCEIVER_ERR_e ADF7030_startContinuousRSSIMeasurement(void) {
 
     ADF7030_transitionState(ADF7030_CCA);
 
+    return TRANSCEIVER_ERR_OK;
 }
 
 TRANSCEIVER_ERR_e ADF7030_endContinuousRSSIMeasurement(void) {
 
     ADF7030_transitionState(ADF7030_PHY_ON);
+
+    return TRANSCEIVER_ERR_OK;
 
 }
 
