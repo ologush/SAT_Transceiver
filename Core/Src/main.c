@@ -35,6 +35,7 @@
 #include "potentiometer.h"
 #include "usbd_cdc_if.h"
 #include "__public__ADF7030_1_fw_macro.h"
+#include "computer_interface.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
