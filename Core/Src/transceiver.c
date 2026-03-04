@@ -354,65 +354,44 @@ TRANSCEIVER_ERR_e ADF7030_transmitPacket(data_packet_s *packet) {
     union {
         uint8_t arr[4];
         uint32_t word;
-    } addr_u;
-
-    union {
-        uint8_t arr[4];
-        uint32_t word;
     } reg_data_u;
 
+    // Set the packet length
     ADF7030_memoryRead(GENERIC_PKT_FRAME_CFG1_Addr, reg_data_u.arr, 4);
-
     reg_data_u.word = reg_data_u.word & 0xFFFFF000 | packet->length;
-
     ADF7030_memoryWrite(GENERIC_PKT_FRAME_CFG1_Addr, reg_data_u.arr, 4);
 
-    addr_u.word = TX_PACKET_MEMORY;
-    addr_u.word = ADF7030_alignWord(addr_u.word);
-
+    // Write the packet to the TX buffer
+    reg_data_u.word = ADF7030_alignWord(TX_PACKET_MEMORY);
     uint8_t command = 0x38;
 
     HAL_GPIO_WritePin(transceiver.cs_port, transceiver.cs_pin, GPIO_PIN_RESET);
     HAL_SPI_Transmit(transceiver.hspi, &command, 1, transceiver.spi_timeout);
-    HAL_SPI_Transmit(transceiver.hspi, addr_u.arr, 4, transceiver.spi_timeout);
+    HAL_SPI_Transmit(transceiver.hspi, reg_data_u.arr, 4, transceiver.spi_timeout);
     HAL_SPI_Transmit(transceiver.hspi, packet->payload, packet->length, transceiver.spi_timeout);
     HAL_GPIO_WritePin(transceiver.cs_port, transceiver.cs_pin, GPIO_PIN_SET);
 
-    union {
-        uint8_t arr[4];
-        uint32_t word;
-    } err_u;
-    err_u.word = 0;
-
-    //This register can be read to check that the packet was transmitted successfully. Clearing the flags before transmisstion
-    ADF7030_memoryRead(IRQ_CTRL_STATUS1_Addr, err_u.arr, 4);
-    err_u.word = err_u.word & 0x00000FFF;
-    ADF7030_memoryWrite(IRQ_CTRL_STATUS1_Addr, err_u.arr, 4);
-
-    //ADF7030_transitionState(ADF7030_CCA);
-    // ADF7030_RFswitchTX();
-    // ADF7030_performCCA();
+    // Switch the RF switch to TX mode and transition to the TX state to transmit the packet
     ADF7030_RFswitchTX();
     ADF7030_transitionState(ADF7030_PHY_TX);
-    //HAL_Delay(100);
-    // Switch the RF switch back to RX mode
 
-
-    //This should read the pin to confirm that the packet has been transmitted. As this is currently not working, I will return to it to solve.
-
+    // Wait until the packet has been transmitted by waiting for the GPIO pin connected to IRQ1 to go high, indicating a packet has been transmitted
     uint32_t time = HAL_GetTick();
     while(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_1) == GPIO_PIN_RESET) {
-        // Wait for the packet to be transmitted
+        // Return error if timeout occurs
         if (HAL_GetTick() - time > TRANSITION_TIMEOUT) {
             return TRANSCEIVER_ERR_ERROR;
         }
     }
+
+    // Switch the RF switch back to RX mode
     ADF7030_RFswitchRX();
-    ADF7030_memoryRead(IRQ_CTRL_STATUS1_Addr, err_u.arr, 4);
-    err_u.word = err_u.word & 0x00000FFF;
-    ADF7030_memoryWrite(IRQ_CTRL_STATUS1_Addr, err_u.arr, 4);
-    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_12);
-    ADF7030_memoryRead(MISC_FW_Addr, err_u.arr, 4);
+
+    // Clear the interrupt flags
+    ADF7030_memoryRead(IRQ_CTRL_STATUS1_Addr, reg_data_u.arr, 4);
+    reg_data_u.word = reg_data_u.word & 0x00000FFF;
+    ADF7030_memoryWrite(IRQ_CTRL_STATUS1_Addr, reg_data_u.arr, 4);
+
     return TRANSCEIVER_ERR_OK;
 }
 
