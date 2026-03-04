@@ -117,6 +117,7 @@ TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, u
     transceiver.miso_pin = miso_pin;
     transceiver.spi_timeout = 100;
 
+    // Reset the transceiver to ensure it is in a known state before initialization
     HAL_GPIO_WritePin(transceiver.rst_port, transceiver.rst_pin, GPIO_PIN_RESET);
     HAL_Delay(10);
     HAL_GPIO_WritePin(transceiver.rst_port, transceiver.rst_pin, GPIO_PIN_SET);
@@ -125,32 +126,32 @@ TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, u
     if(SPI_host_initialization(&transceiver, 50) == TRANSCEIVER_ERR_ERROR) {
         return TRANSCEIVER_ERR_ERROR;
     }
+
     ADF7030_transitionState(ADF7030_PHY_ON);
 
 #ifdef LOAD_CONFIG
     ADF7030_loadConfig(Radio_Memory_Configuration, sizeof(Radio_Memory_Configuration));
 #endif
 
-
-
     union {
         uint32_t word;
         uint8_t arr[4];
     } data;
 
-    data.word = 0;
+    // Retain BBRAM during PHY_SLEEP
     ADF7030_memoryRead(PROFILE_LPM_CFG0_Addr, data.arr, 4);
     data.word = data.word | 0x00010000;
     ADF7030_memoryWrite(PROFILE_LPM_CFG0_Addr, data.arr, 4);
 
-    //Set GPIO 1 to output to set the RF switch
+    //Set GPIO 1 to output to control the RF switch
     data.word = GPIO1_CFG << 8;
     ADF7030_memoryWrite(PROFILE_GPCON0_3_Addr, data.arr, 4);
 
-    //Set GPIO 4 to IRQ1 output
+    //Set GPIO 4 to IRQ1 output. This is used to indicate to the MCU when a packet has been received.
     data.word = GPIO4_CFG;
     ADF7030_memoryWrite(PROFILE_GPCON4_7_Addr, data.arr, 4);
 
+    // This is used to make the new settings take effect
     ADF7030_transitionState(ADF7030_CFG_DEV);
     
     //Turn RF switch to TX mode so there is no interference during the calibration process
@@ -166,15 +167,12 @@ TRANSCEIVER_ERR_e ADF7030_init(SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_port, u
 
     ADF7030_transitionState(ADF7030_PHY_OFF);
 
-
+    // Additional configuration that can be altered from the macros
     ADF7030_radioSettings();
-
-    //ADF7030_configureCCA();
 
     // Set the RF switch back to RX mode and put the system in the RX state
     ADF7030_RFswitchRX();
     ADF7030_transitionState(ADF7030_PHY_ON);
-
     ADF7030_transitionState(ADF7030_PHY_RX);
 
     return TRANSCEIVER_ERR_OK;

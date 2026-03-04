@@ -149,7 +149,6 @@ int main(void)
 
   ADF7030_init(&hspi1, GPIOB, GPIO_PIN_0, GPIOC, GPIO_PIN_15, GPIOA, GPIO_PIN_6);
 
-
   HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
   HAL_ADC_Start_DMA(&hadc1, (uint32_t *) adc_data, ADC_NUM_CONVERSIONS);
 
