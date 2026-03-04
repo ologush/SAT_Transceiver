@@ -33,6 +33,8 @@
 #include "transceiver.h"
 #include "temp_sensor.h"
 #include "potentiometer.h"
+#include "usbd_cdc_if.h"
+#include "__public__ADF7030_1_fw_macro.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -141,26 +143,37 @@ int main(void)
   MX_SPI1_Init();
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
+  MX_USB_DEVICE_Init();
 
   // Turn on XCVR power
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, GPIO_PIN_SET);
 
   ADF7030_init(&hspi1, GPIOB, GPIO_PIN_0, GPIOC, GPIO_PIN_15, GPIOA, GPIO_PIN_6);
 
-
   HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
   HAL_ADC_Start_DMA(&hadc1, (uint32_t *) adc_data, ADC_NUM_CONVERSIONS);
 
   HAL_TIM_Base_Start(&htim3);
 
-  ADF7030_transitionState(ADF7030_PHY_RX);
+
 
   data_packet_s test_packet = {
     .header = 0xAB,
-    .payload = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A},
-    .length = 10
+    .payload = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10},
+    .length = 16
   };
-  ADF7030_transmitPacket(&test_packet);
+
+  data_packet_s receivedPacket;
+
+  // while (1) {
+  //   ADF7030_transmitPacket(&test_packet);
+  //   HAL_Delay(500);
+  // }
+
+  while (1) {
+    ADF7030_receivePacket(&receivedPacket);
+  }
+
 
   /* USER CODE END 2 */
 
