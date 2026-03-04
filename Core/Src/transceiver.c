@@ -493,24 +493,23 @@ TRANSCEIVER_ERR_e ADF7030_receivePacket(data_packet_s *packet) {
     union {
         uint8_t arr[4];
         uint32_t word;
-    } data_len_u;
-
-    ADF7030_memoryRead(GENERIC_PKT_FRAME_CFG3_Addr, data_len_u.arr, 4);
-    data_len_u.word = (data_len_u.word >> 16) - CRC_LEN; //Subtract the CRC length from the total length to get the actual data length
-
-    ADF7030_readRXBuffer(packet->payload, data_len_u.word);
-    packet->length = data_len_u.word;
-
-    union {
-        uint8_t arr[4];
-        uint32_t word;
     } reg_data_u;
-    reg_data_u.word = 0;
+
+    // Read the length of the received packet
+    ADF7030_memoryRead(GENERIC_PKT_FRAME_CFG3_Addr, reg_data_u.arr, 4);
+    // Subtract the CRC length from the total length to get the actual data length
+    reg_data_u.word = (reg_data_u.word >> 16) - CRC_LEN;
+    packet->length = reg_data_u.word;
+
+    // Read the received packet from the RX buffer, store it in the packet payload
+    ADF7030_readRXBuffer(packet->payload, reg_data_u.word);
 
     // Clear the IRQ0 flag for packet received
     ADF7030_memoryRead(IRQ_CTRL_STATUS1_Addr, reg_data_u.arr, 4);
     reg_data_u.word = reg_data_u.word & 0x00000FFF;
     ADF7030_memoryWrite(IRQ_CTRL_STATUS1_Addr, reg_data_u.arr, 4);
+
+    // Transition back to RX state
     ADF7030_transitionState(ADF7030_PHY_RX);
 
     return TRANSCEIVER_ERR_OK;
@@ -610,7 +609,8 @@ TRANSCEIVER_ERR_e ADF7030_memoryRead(uint32_t address, uint8_t *data, uint32_t n
 
     HAL_GPIO_WritePin(transceiver.cs_port, transceiver.cs_pin, GPIO_PIN_RESET);
     HAL_SPI_Transmit(transceiver.hspi, &command, 1, transceiver.spi_timeout);
-    HAL_SPI_Transmit(transceiver.hspi, addr.arr, 6, transceiver.spi_timeout); //Adding the extra two bytes to transmit nonsense so that we can start receiving the data on the TransmitReceive call
+    // Adding the extra two bytes to transmit nonsense so that we can start receiving the data on the Receive call
+    HAL_SPI_Transmit(transceiver.hspi, addr.arr, 6, transceiver.spi_timeout);
     HAL_SPI_Receive(transceiver.hspi, unaligned_data_arr, nbytes, transceiver.spi_timeout);
     HAL_GPIO_WritePin(transceiver.cs_port, transceiver.cs_pin, GPIO_PIN_SET);
 
@@ -620,6 +620,7 @@ TRANSCEIVER_ERR_e ADF7030_memoryRead(uint32_t address, uint8_t *data, uint32_t n
 
 }
 
+// This functions differently than memoryRead as it doesn't have to shuffle the bytes around to be aligned properly as words
 TRANSCEIVER_ERR_e ADF7030_readRXBuffer(uint8_t *data, uint32_t nbytes) {
 
     union {
@@ -628,15 +629,18 @@ TRANSCEIVER_ERR_e ADF7030_readRXBuffer(uint8_t *data, uint32_t nbytes) {
     } addr_u;
 
     addr_u.word = ADF7030_alignWord(RX_PACKET_MEMORY);
+
     uint8_t command = 0x78;
 
     HAL_GPIO_WritePin(transceiver.cs_port, transceiver.cs_pin, GPIO_PIN_RESET);
     HAL_SPI_Transmit(transceiver.hspi, &command, 1, transceiver.spi_timeout);
-    HAL_SPI_Transmit(transceiver.hspi, addr_u.arr, 6, transceiver.spi_timeout); //Adding the extra two bytes to transmit nonsense so that we can start receiving the data on the TransmitReceive call
+    // Adding the extra two bytes to transmit nonsense so that we can start receiving the data on the Receive call
+    HAL_SPI_Transmit(transceiver.hspi, addr_u.arr, 6, transceiver.spi_timeout);
     HAL_SPI_Receive(transceiver.hspi, data, nbytes, transceiver.spi_timeout);
     HAL_GPIO_WritePin(transceiver.cs_port, transceiver.cs_pin, GPIO_PIN_SET);
 
     return TRANSCEIVER_ERR_OK;
+
 }
 
 static uint32_t ADF7030_alignWord(uint32_t word) {

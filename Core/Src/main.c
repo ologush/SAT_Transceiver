@@ -144,6 +144,7 @@ int main(void)
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
   MX_USB_DEVICE_Init();
+
   // Turn on XCVR power
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, GPIO_PIN_SET);
 
@@ -164,31 +165,11 @@ int main(void)
 
   data_packet_s receivedPacket;
 
-  union {
-    uint8_t arr[4];
-    uint32_t word;
-  } reg_data;
-
-
-
   // while (1) {
   //   ADF7030_transmitPacket(&test_packet);
   //   HAL_Delay(500);
   // }
-  ADF7030_STATE_e current_state = ADF7030_getState();
 
-  // ADF7030_transitionState(ADF7030_PHY_ON);
-  // ADF7030_startContinuousRSSIMeasurement();
-
-  // float RSSI_data;
-  // while (1) {
-  //   ADF7030_getRSSI(&RSSI_data);
-  //   printRSSI(RSSI_data);
-  //   HAL_Delay(100);
-  // }
-  // ADF7030_endContinuousRSSIMeasurement();
-  // ADF7030_transmitPacket(&test_packet);
-  ADF7030_memoryRead(PROFILE_PACKET_CFG_Addr, reg_data.arr, 4);
   while (1) {
     ADF7030_receivePacket(&receivedPacket);
   }
