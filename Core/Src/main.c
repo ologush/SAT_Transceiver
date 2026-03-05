@@ -156,23 +156,14 @@ int main(void)
 
   HAL_TIM_Base_Start(&htim3);
 
-
-
   data_packet_s test_packet = {
-    .header = 0xAB,
-    .payload = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10},
-    .length = 16
+    .length = 1,
+    .payload = { CI_CMD_GET_SENSOR_DATA }
   };
 
-  data_packet_s receivedPacket;
-
-  // while (1) {
-  //   ADF7030_transmitPacket(&test_packet);
-  //   HAL_Delay(500);
-  // }
-
   while (1) {
-    ADF7030_receivePacket(&receivedPacket);
+    CI_sendCommand(test_packet.payload, test_packet.length);
+    HAL_Delay(500);
   }
 
 
@@ -283,6 +274,7 @@ void vADCSCommandTask(void * pvParameters) {
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
   if(GPIO_Pin == GPIO_PIN_1) {
     ADF7030_receivePacket(&receivedPacket);
+    CI_processCommand(receivedPacket.payload, receivedPacket.length);
   }
 }
 
@@ -290,7 +282,6 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
   if (hadc->Instance == ADC1) {
     current_potentiometer_percentage = potentiometer_ADCToPercentage(adc_data[0]);
     current_temperature = temp_sensor_ADCToTemperature(adc_data[1]);
-
   }
 }
 
