@@ -85,6 +85,7 @@ QueueHandle_t xXCVR_txQueue;
 QueueHandle_t xXCVR_rxQueue;
 
 static SemaphoreHandle_t xXCVRMutex;
+static SemaphoreHandle_t xRXReadySemaphore;
 
 
 /* USER CODE END PV */
@@ -130,6 +131,8 @@ int main(void)
 #endif
 
   xXCVRMutex = xSemaphoreCreateMutex();
+  xRXReadySemaphore = xSemaphoreCreateBinary();
+  
 
   xXCVR_txQueue = xQueueCreate(10, sizeof(data_packet_s));
   xXCVR_rxQueue = xQueueCreate(10, sizeof(data_packet_s));
@@ -142,7 +145,7 @@ int main(void)
 
   /* USER CODE BEGIN Init */
   xTransmitTaskReturned = xTaskCreate(
-                            vTransmitTask,
+                            vXCVR_TXTask,
                             "Transmit",
                             TRANSMIT_STACK_SIZE,
                             NULL,
@@ -272,10 +275,24 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-void vTransmitTask(void *pvParameters) {
-
+void vXCVR_TXTask(void *pvParameters) {
+  data_packet_s packetToSend;
   for(;;) {
 
+    // Pull a packet off the transmit queue and send it via the transceiver
+    // Should disable the input interrupt during this as the ISR will get triggered for receiving
+    xQueueReceive(xXCVR_txQueue, &packetToSend, portMAX_DELAY);
+    xSemaphoreTake(xXCVRMutex, portMAX_DELAY);
+
+    // Disable the interrupt tied to the XCVR as this gets flagged when a transmission or a reception is complete
+    HAL_NVIC_DisableIRQ(EXTI1_IRQn);
+    ADF7030_transmitPacket(&packetToSend);
+
+    // Clear the interrupt flag and re-enable the interrupt
+    __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_1);
+    HAL_NVIC_EnableIRQ(EXTI1_IRQn);
+
+    xSemaphoreGive(xXCVRMutex);
   }
 
   vTaskDelete(NULL);
@@ -283,13 +300,16 @@ void vTransmitTask(void *pvParameters) {
 
 void vXCVR_RXTask(void * pvParameters) {
 
+  data_packet_s receivedPacket;
   for(;;) {
-    if (xSemaphoreTake(xXCVRMutex, portMAX_DELAY) == pdTRUE) {
-      data_packet_s receivedPacket;
-      ADF7030_receivePacket(&receivedPacket);
-      xQueueSend(xXCVR_rxQueue, &receivedPacket, portMAX_DELAY);
-      xSemaphoreGive(xXCVRMutex);
-    }
+
+    // Wait until a packet has been received, then read it and push it to the receive queue.
+    xSemaphoreTake(xRXReadySemaphore, portMAX_DELAY);
+    xSemaphoreTake(xXCVRMutex, portMAX_DELAY);
+
+    ADF7030_receivePacket(&receivedPacket);
+    xSemaphoreGive(xXCVRMutex);
+    xQueueSend(xXCVR_rxQueue, &receivedPacket, portMAX_DELAY);
   }
 
   vTaskDelete(NULL);
@@ -306,7 +326,10 @@ void vADCSCommandTask(void * pvParameters) {
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
   if(GPIO_Pin == GPIO_PIN_1) {
-    xSemaphoreGiveFromISR(xXCVRMutex, NULL);
+
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    xSemaphoreGiveFromISR(xRXReadySemaphore, &xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
   }
 }
 

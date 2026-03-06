@@ -62,7 +62,7 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 
 /* USER CODE BEGIN Private defines */
-void vTransmitTask(void * pvParameters);
+void vXCVR_TXTask(void * pvParameters);
 void vADCSCommandTask(void * pvParameters);
 void vSensorTask(void * pvParameters);
 void vXCVR_RXTask(void * pvParameters);
