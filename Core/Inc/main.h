@@ -63,9 +63,9 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN Private defines */
 void vTransmitTask(void * pvParameters);
-void vReceiveTask(void * pvParameters);
 void vADCSCommandTask(void * pvParameters);
 void vSensorTask(void * pvParameters);
+void vXCVR_RXTask(void * pvParameters);
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

@@ -36,6 +36,7 @@
 #include "usbd_cdc_if.h"
 #include "__public__ADF7030_1_fw_macro.h"
 #include "computer_interface.h"
+#include "semphr.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -50,18 +51,42 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
+#define XCVR_RX_STACK_SIZE 1024
+
 #define ADC_NUM_CONVERSIONS 2
+
+// This should be defined based on whether this is the base station, or the satellite.
+#define BASE_STATION
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-data_packet_s receivedPacket;
 
 static uint16_t adc_data[ADC_NUM_CONVERSIONS];
 
 float current_temperature;
 float current_potentiometer_percentage;
+
+
+#ifdef BASE_STATION
+QueueHandle_t xUSB_txQueue;
+QueueHandle_t xUSB_rxQueue;
+
+#endif
+
+#ifdef SATELLITE
+QueueHandle_t xUART_txQueue;
+QueueHandle_t xUART_rxQueue;
+
+#endif
+
+QueueHandle_t xXCVR_txQueue;
+QueueHandle_t xXCVR_rxQueue;
+
+static SemaphoreHandle_t xXCVRMutex;
+
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -85,14 +110,29 @@ int main(void)
 
   /* USER CODE BEGIN 1 */
   BaseType_t xTransmitTaskReturned;
-  BaseType_t xReceiveTaskReturned;
+  BaseType_t xXCVR_RXTaskReturned;
   BaseType_t xADCSCommandTaskReturned;
   BaseType_t xSensorTaskReturned;
+  
 
   TaskHandle_t xTransmitHandle = NULL;
   TaskHandle_t xReceiveHandle = NULL;
   TaskHandle_t xADCSCommandHandle = NULL;
   TaskHandle_t xSensorHandle = NULL;
+
+#ifdef BASE_STATION
+  xUSB_txQueue = xQueueCreate(10, sizeof(data_packet_s));
+  xUSB_rxQueue = xQueueCreate(10, sizeof(data_packet_s));
+#endif
+
+#ifdef SATELLITE
+
+#endif
+
+  xXCVRMutex = xSemaphoreCreateMutex();
+
+  xXCVR_txQueue = xQueueCreate(10, sizeof(data_packet_s));
+  xXCVR_rxQueue = xQueueCreate(10, sizeof(data_packet_s));
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -110,10 +150,10 @@ int main(void)
                             &xTransmitHandle);
 
   
-  xReceiveTaskReturned = xTaskCreate(
-                          vReceiveTask,
-                          "Receive",
-                          RECEIVE_STACK_SIZE,
+  xXCVR_RXTaskReturned = xTaskCreate(
+                          vXCVR_RXTask,
+                          "XCVR_RX",
+                          XCVR_RX_STACK_SIZE,
                           NULL,
                           1,
                           &xReceiveHandle);
@@ -155,18 +195,6 @@ int main(void)
   HAL_ADC_Start_DMA(&hadc1, (uint32_t *) adc_data, ADC_NUM_CONVERSIONS);
 
   HAL_TIM_Base_Start(&htim3);
-
-  data_packet_s test_packet = {
-    .length = 1,
-    .payload = { CI_CMD_GET_SENSOR_DATA }
-  };
-
-  while (1) {
-    CI_sendCommand(test_packet.payload, test_packet.length);
-    HAL_Delay(500);
-  }
-
-
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -253,10 +281,15 @@ void vTransmitTask(void *pvParameters) {
   vTaskDelete(NULL);
 }
 
-void vReceiveTask(void * pvParameters) {
+void vXCVR_RXTask(void * pvParameters) {
 
   for(;;) {
-
+    if (xSemaphoreTake(xXCVRMutex, portMAX_DELAY) == pdTRUE) {
+      data_packet_s receivedPacket;
+      ADF7030_receivePacket(&receivedPacket);
+      xQueueSend(xXCVR_rxQueue, &receivedPacket, portMAX_DELAY);
+      xSemaphoreGive(xXCVRMutex);
+    }
   }
 
   vTaskDelete(NULL);
@@ -273,8 +306,7 @@ void vADCSCommandTask(void * pvParameters) {
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
   if(GPIO_Pin == GPIO_PIN_1) {
-    ADF7030_receivePacket(&receivedPacket);
-    CI_processCommand(receivedPacket.payload, receivedPacket.length);
+    xSemaphoreGiveFromISR(xXCVRMutex, NULL);
   }
 }
 
