@@ -81,6 +81,7 @@ void vXCVR_RXTask(void * pvParameters);
 void vUSBTransmitTask(void * pvParameters);
 void vUSBReceiveTask(void * pvParameters);
 #endif
+
 #ifdef SATELLITE
 void vSAT_XCVR_CommandTask(void * pvParameters);
 #endif

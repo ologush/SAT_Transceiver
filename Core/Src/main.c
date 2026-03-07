@@ -220,6 +220,7 @@ int main(void)
                               NULL,
                               3,
                               &xSAT_XCVR_CommandHandle);
+
 #endif
   /* USER CODE END Init */
 
