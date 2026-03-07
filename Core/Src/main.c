@@ -385,6 +385,15 @@ void vUSBTransmitTask(void *pvParameters) {
 
   for(;;) {
 
+    // Wait until there is a packet to send over USB, then send it
+    data_packet_s packetToSend;
+    xQueueReceive(xUSB_txQueue, &packetToSend, portMAX_DELAY);
+
+    // Wait until the USB is ready to transmit, then send the packet over USB
+    xSemaphoreTake(xUSBMutex, portMAX_DELAY);
+    USBD_CDC_SetTxBuffer(&hUsbDeviceFS, packetToSend.payload, packetToSend.length);
+    USBD_CDC_TransmitPacket(&hUsbDeviceFS);
+    xSemaphoreGive(xUSBMutex);
   }
 
   vTaskDelete(NULL);
