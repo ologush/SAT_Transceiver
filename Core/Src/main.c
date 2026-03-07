@@ -51,7 +51,9 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-
+#ifdef BASE_STATION
+#define USB_RX_BUF_SIZE 128
+#endif
 
 #define ADC_NUM_CONVERSIONS 2
 
@@ -356,15 +358,24 @@ void vADCSCommandTask(void * pvParameters) {
 #ifdef BASE_STATION
 void vUSBReceiveTask(void *pvParameters) {
 
+  uint8_t cmdBuf[USB_RX_BUF_SIZE];
+  uint32_t cmdLen;
+
   for(;;) {
 
     // Wait until a packet has been received over USB, then push it to the USB receive queue
     xSemaphoreTake(xUSBReceiveSemaphore, portMAX_DELAY);
-    xQueueSend(xUSB_rxQueue, &UserRxBufferFS, portMAX_DELAY);
+
+    // Copy usb data to a local buffer
+    cmdLen = usbRxLen;
+    memcpy(cmdBuf, UserRxBufferFS, cmdLen);
 
     // Re-arm USB
     USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &UserRxBufferFS[0]);
     USBD_CDC_ReceivePacket(&hUsbDeviceFS);
+
+    // Process the command received over USB
+    CI_processCommand(cmdBuf, cmdLen);
   }
 
   vTaskDelete(NULL);
