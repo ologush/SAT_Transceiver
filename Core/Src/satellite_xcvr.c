@@ -7,6 +7,7 @@
 #include "string.h"
 
 #define ADCS_SENSOR_DATA_RESPONSE_SIZE 12
+#define USART_TIMEOUT 100
 
 extern QueueHandle_t xXCVR_txQueue;
 extern float current_temperature;
@@ -19,27 +20,50 @@ SAT_XCVR_ERR_e SAT_XCVR_processCommand(data_packet_s *packet) {
     CMD_e cmd = (CMD_e)packet->payload[0];
 
     switch (cmd) {
-        case CMD_SET_ADCS_MODE:
-            
+        case CMD_SET_ADCS_MODE: {
+
+            uint8_t response;
             // Pass along the set ADCS mode command to the ADCS over USART, should implement an ACK as well
-            HAL_USART_Transmit(&husart1, packet->payload, packet->length, HAL_MAX_DELAY);
+            HAL_USART_Transmit(&husart1, packet->payload, packet->length, USART_TIMEOUT);
+            HAL_USART_Receive(&husart1, &response, 1, USART_TIMEOUT); 
+
+            CMD_e responseCmd = (response == 0) ? CMD_RESP_ACK : CMD_RESP_NACK;
+            data_packet_s responsePacket;
+            responsePacket.payload[0] = (uint8_t)responseCmd;
+            responsePacket.payload[1] = cmd;
+            responsePacket.length = 2;
+
+            xQueueSend(xXCVR_txQueue, &responsePacket, portMAX_DELAY);
 
             break;
-        case CMD_SET_ADCS_TARGET:
+        }
+            
+        case CMD_SET_ADCS_TARGET: {
 
+            uint8_t response;
             // Pass along the set ADCS target command to the ADCS over USART, should implement an ACK as well
-            HAL_USART_Transmit(&husart1, packet->payload, packet->length, HAL_MAX_DELAY);
+            HAL_USART_Transmit(&husart1, packet->payload, packet->length, USART_TIMEOUT);
+            HAL_USART_Receive(&husart1, &response, 1, USART_TIMEOUT);
+
+            CMD_e responseCmd = (response == 0) ? CMD_RESP_ACK : CMD_RESP_NACK;
+            data_packet_s responsePacket;
+            responsePacket.payload[0] = (uint8_t)responseCmd;
+            responsePacket.payload[1] = cmd;
+            responsePacket.length = 2;
+
+            xQueueSend(xXCVR_txQueue, &responsePacket, portMAX_DELAY);
 
             break;
-        case CMD_GET_SAT_SENSOR_DATA:
+        }
+
+            
+        case CMD_GET_SAT_SENSOR_DATA: {
             
             uint8_t usartResponse[ADCS_SENSOR_DATA_RESPONSE_SIZE];
 
             // Solicit the sensor data from the ADCS over USART
-            HAL_USART_Transmit(&husart1, packet->payload, packet->length, HAL_MAX_DELAY);
-
-            
-            HAL_USART_Receive(&husart1, usartResponse, ADCS_SENSOR_DATA_RESPONSE_SIZE, HAL_MAX_DELAY);
+            HAL_USART_Transmit(&husart1, packet->payload, packet->length, USART_TIMEOUT);
+            HAL_USART_Receive(&husart1, usartResponse, ADCS_SENSOR_DATA_RESPONSE_SIZE, USART_TIMEOUT);
 
             float current_temp;
             data_packet_s responsePacket;   
@@ -60,6 +84,9 @@ SAT_XCVR_ERR_e SAT_XCVR_processCommand(data_packet_s *packet) {
             xQueueSend(xXCVR_txQueue, &responsePacket, portMAX_DELAY);
 
             break;
+        }
+            
+
         default:
             return SAT_XCVR_ERR_ERROR;
     }
