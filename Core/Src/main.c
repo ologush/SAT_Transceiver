@@ -35,8 +35,16 @@
 #include "potentiometer.h"
 #include "usbd_cdc_if.h"
 #include "__public__ADF7030_1_fw_macro.h"
-#include "computer_interface.h"
+
 #include "semphr.h"
+
+#ifdef BASE_STATION
+#include "computer_interface.h"
+#endif
+
+#ifdef SATELLITE
+#include "satellite_xcvr.h"
+#endif
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -120,7 +128,7 @@ int main(void)
   BaseType_t xXCVR_RXTaskReturned;
   BaseType_t xADCSCommandTaskReturned;
   BaseType_t xSensorTaskReturned;
-  
+
 
   TaskHandle_t xTransmitHandle = NULL;
   TaskHandle_t xReceiveHandle = NULL;
@@ -139,7 +147,9 @@ int main(void)
 #endif
 
 #ifdef SATELLITE
+  BaseType_t xSAT_XCVR_CommandTaskReturned;
 
+  TaskHandle_t xSAT_XCVR_CommandHandle = NULL;
 #endif
 
   xXCVRMutex = xSemaphoreCreateMutex();
@@ -200,6 +210,16 @@ int main(void)
                               &xUSBReceiveHandle);
 
 
+#endif
+#ifdef SATELLITE
+  
+  xSAT_XCVR_CommandTaskReturned = xTaskCreate(
+                              vSAT_XCVR_CommandTask,
+                              "SAT_XCVR_Command",
+                              SAT_XCVR_COMMAND_STACK_SIZE,
+                              NULL,
+                              3,
+                              &xSAT_XCVR_CommandHandle);
 #endif
   /* USER CODE END Init */
 
@@ -334,13 +354,20 @@ void vXCVR_RXTask(void * pvParameters) {
   data_packet_s receivedPacket;
   for(;;) {
 
-    // Wait until a packet has been received, then read it and push it to the receive queue.
+    // Wait until a packet has been received, then read it
     xSemaphoreTake(xRXReadySemaphore, portMAX_DELAY);
     xSemaphoreTake(xXCVRMutex, portMAX_DELAY);
 
     ADF7030_receivePacket(&receivedPacket);
     xSemaphoreGive(xXCVRMutex);
+
+    // Depending on whether this is a satellite or a base station, push the received packet to the appropriate queue for processing
+#ifdef BASE_STATION
+    xQueueSend(xUSB_txQueue, &receivedPacket, portMAX_DELAY);
+#endif
+#ifdef SATELLITE
     xQueueSend(xXCVR_rxQueue, &receivedPacket, portMAX_DELAY);
+#endif
   }
 
   vTaskDelete(NULL);
@@ -398,6 +425,23 @@ void vUSBTransmitTask(void *pvParameters) {
 
   vTaskDelete(NULL);
 }
+#endif
+#ifdef SATELLITE
+
+void vSAT_XCVR_CommandTask(void * pvParameters) {
+
+  for(;;) {
+
+    // Wait until there is a packet received from the transceiver, then process it
+    data_packet_s receivedPacket;
+    xQueueReceive(xXCVR_rxQueue, &receivedPacket, portMAX_DELAY);
+
+    SAT_XCVR_processCommand(&receivedPacket);
+  }
+
+  vTaskDelete(NULL);
+}
+
 #endif
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
