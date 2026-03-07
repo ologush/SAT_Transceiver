@@ -68,7 +68,7 @@ SAT_XCVR_ERR_e SAT_XCVR_processCommand(data_packet_s *packet) {
             float current_temp;
             data_packet_s responsePacket;   
 
-            responsePacket.payload[0] = CMD_GET_SAT_SENSOR_DATA;
+            responsePacket.payload[0] = CMD_RESP_SAT_SENSOR_DATA;
 
             // ADF7030 temperature for the response
             ADF7030_getTemperature(&current_temp);
