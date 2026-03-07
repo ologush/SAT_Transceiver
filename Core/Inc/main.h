@@ -41,10 +41,17 @@ extern "C" {
 
 /* Exported constants --------------------------------------------------------*/
 /* USER CODE BEGIN EC */
-#define TRANSMIT_STACK_SIZE 128
-#define RECEIVE_STACK_SIZE 128
+
 #define ADCS_COMMAND_STACK_SIZE 128
 #define SENSOR_STACK_SIZE 128
+#define XCVR_RX_STACK_SIZE 128
+#define XCVR_TX_STACK_SIZE 128
+
+
+#ifdef BASE_STATION
+#define USB_TRANSMIT_STACK_SIZE 128
+#define USB_RECEIVE_STACK_SIZE 128
+#endif
 /* USER CODE END EC */
 
 /* Exported macro ------------------------------------------------------------*/
@@ -66,6 +73,8 @@ void vXCVR_TXTask(void * pvParameters);
 void vADCSCommandTask(void * pvParameters);
 void vSensorTask(void * pvParameters);
 void vXCVR_RXTask(void * pvParameters);
+void vUSBTransmitTask(void * pvParameters);
+void vUSBReceiveTask(void * pvParameters);
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

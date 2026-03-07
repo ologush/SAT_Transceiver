@@ -51,12 +51,10 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-#define XCVR_RX_STACK_SIZE 1024
+
 
 #define ADC_NUM_CONVERSIONS 2
 
-// This should be defined based on whether this is the base station, or the satellite.
-#define BASE_STATION
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -73,6 +71,12 @@ float current_potentiometer_percentage;
 QueueHandle_t xUSB_txQueue;
 QueueHandle_t xUSB_rxQueue;
 
+static SemaphoreHandle_t xUSBMutex;
+SemaphoreHandle_t xUSBReceiveSemaphore;
+
+extern uint8_t UserRxBufferFS[];
+extern USBD_HandleTypeDef hUsbDeviceFS;
+uint32_t usbRxLen;
 #endif
 
 #ifdef SATELLITE
@@ -124,6 +128,12 @@ int main(void)
 #ifdef BASE_STATION
   xUSB_txQueue = xQueueCreate(10, sizeof(data_packet_s));
   xUSB_rxQueue = xQueueCreate(10, sizeof(data_packet_s));
+
+  TaskHandle_t xUSBTransmitHandle = NULL;
+  TaskHandle_t xUSBReceiveHandle = NULL;
+
+  BaseType_t xUSBTransmitTaskReturned;
+  BaseType_t xUSBReceiveTaskReturned;
 #endif
 
 #ifdef SATELLITE
@@ -147,7 +157,7 @@ int main(void)
   xTransmitTaskReturned = xTaskCreate(
                             vXCVR_TXTask,
                             "Transmit",
-                            TRANSMIT_STACK_SIZE,
+                            XCVR_TX_STACK_SIZE,
                             NULL,
                             2,
                             &xTransmitHandle);
@@ -169,7 +179,26 @@ int main(void)
                               3,
                               &xADCSCommandHandle);
   
-    
+#ifdef BASE_STATION
+
+  xUSBTransmitTaskReturned = xTaskCreate(
+                              vUSBTransmitTask,
+                              "USBTransmit",
+                              USB_TRANSMIT_STACK_SIZE,
+                              NULL,
+                              2,
+                              &xUSBTransmitHandle);
+
+  xUSBReceiveTaskReturned = xTaskCreate(
+                              vUSBReceiveTask,
+                              "USBReceive",
+                              USB_RECEIVE_STACK_SIZE,
+                              NULL,
+                              2,
+                              &xUSBReceiveHandle);
+
+
+#endif
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -324,6 +353,33 @@ void vADCSCommandTask(void * pvParameters) {
   vTaskDelete(NULL);
 }
 
+#ifdef BASE_STATION
+void vUSBReceiveTask(void *pvParameters) {
+
+  for(;;) {
+
+    // Wait until a packet has been received over USB, then push it to the USB receive queue
+    xSemaphoreTake(xUSBReceiveSemaphore, portMAX_DELAY);
+    xQueueSend(xUSB_rxQueue, &UserRxBufferFS, portMAX_DELAY);
+
+    // Re-arm USB
+    USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &UserRxBufferFS[0]);
+    USBD_CDC_ReceivePacket(&hUsbDeviceFS);
+  }
+
+  vTaskDelete(NULL);
+}
+
+void vUSBTransmitTask(void *pvParameters) {
+
+  for(;;) {
+
+  }
+
+  vTaskDelete(NULL);
+}
+#endif
+
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
   if(GPIO_Pin == GPIO_PIN_1) {
 
@@ -339,6 +395,8 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
     current_temperature = temp_sensor_ADCToTemperature(adc_data[1]);
   }
 }
+
+
 
 /* USER CODE END 4 */
 
