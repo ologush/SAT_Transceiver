@@ -10,5 +10,4 @@ typedef enum {
 
 SAT_XCVR_ERR_e SAT_XCVR_processCommand(data_packet_s *packet);
 
-
 #endif
