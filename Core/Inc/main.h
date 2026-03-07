@@ -41,10 +41,21 @@ extern "C" {
 
 /* Exported constants --------------------------------------------------------*/
 /* USER CODE BEGIN EC */
-#define TRANSMIT_STACK_SIZE 128
-#define RECEIVE_STACK_SIZE 128
+
 #define ADCS_COMMAND_STACK_SIZE 128
 #define SENSOR_STACK_SIZE 128
+#define XCVR_RX_STACK_SIZE 128
+#define XCVR_TX_STACK_SIZE 128
+
+
+#ifdef BASE_STATION
+#define USB_TRANSMIT_STACK_SIZE 128
+#define USB_RECEIVE_STACK_SIZE 128
+#endif
+
+#ifdef SATELLITE
+#define SAT_XCVR_COMMAND_STACK_SIZE 128
+#endif
 /* USER CODE END EC */
 
 /* Exported macro ------------------------------------------------------------*/
@@ -62,10 +73,17 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 
 /* USER CODE BEGIN Private defines */
-void vTransmitTask(void * pvParameters);
-void vReceiveTask(void * pvParameters);
+void vXCVR_TXTask(void * pvParameters);
 void vADCSCommandTask(void * pvParameters);
 void vSensorTask(void * pvParameters);
+void vXCVR_RXTask(void * pvParameters);
+#ifdef BASE_STATION
+void vUSBTransmitTask(void * pvParameters);
+void vUSBReceiveTask(void * pvParameters);
+#endif
+#ifdef SATELLITE
+void vSAT_XCVR_CommandTask(void * pvParameters);
+#endif
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

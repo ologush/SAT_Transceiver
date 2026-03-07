@@ -35,7 +35,16 @@
 #include "potentiometer.h"
 #include "usbd_cdc_if.h"
 #include "__public__ADF7030_1_fw_macro.h"
+
+#include "semphr.h"
+
+#ifdef BASE_STATION
 #include "computer_interface.h"
+#endif
+
+#ifdef SATELLITE
+#include "satellite_xcvr.h"
+#endif
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -50,18 +59,49 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
+#ifdef BASE_STATION
+#define USB_RX_BUF_SIZE 128
+#endif
+
 #define ADC_NUM_CONVERSIONS 2
+
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-data_packet_s receivedPacket;
 
 static uint16_t adc_data[ADC_NUM_CONVERSIONS];
 
 float current_temperature;
 float current_potentiometer_percentage;
+
+
+#ifdef BASE_STATION
+QueueHandle_t xUSB_txQueue;
+QueueHandle_t xUSB_rxQueue;
+
+static SemaphoreHandle_t xUSBMutex;
+SemaphoreHandle_t xUSBReceiveSemaphore;
+
+extern uint8_t UserRxBufferFS[];
+extern USBD_HandleTypeDef hUsbDeviceFS;
+uint32_t usbRxLen;
+#endif
+
+#ifdef SATELLITE
+QueueHandle_t xUART_txQueue;
+QueueHandle_t xUART_rxQueue;
+
+#endif
+
+QueueHandle_t xXCVR_txQueue;
+QueueHandle_t xXCVR_rxQueue;
+
+static SemaphoreHandle_t xXCVRMutex;
+static SemaphoreHandle_t xRXReadySemaphore;
+
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -85,14 +125,39 @@ int main(void)
 
   /* USER CODE BEGIN 1 */
   BaseType_t xTransmitTaskReturned;
-  BaseType_t xReceiveTaskReturned;
+  BaseType_t xXCVR_RXTaskReturned;
   BaseType_t xADCSCommandTaskReturned;
   BaseType_t xSensorTaskReturned;
+
 
   TaskHandle_t xTransmitHandle = NULL;
   TaskHandle_t xReceiveHandle = NULL;
   TaskHandle_t xADCSCommandHandle = NULL;
   TaskHandle_t xSensorHandle = NULL;
+
+#ifdef BASE_STATION
+  xUSB_txQueue = xQueueCreate(10, sizeof(data_packet_s));
+  xUSB_rxQueue = xQueueCreate(10, sizeof(data_packet_s));
+
+  TaskHandle_t xUSBTransmitHandle = NULL;
+  TaskHandle_t xUSBReceiveHandle = NULL;
+
+  BaseType_t xUSBTransmitTaskReturned;
+  BaseType_t xUSBReceiveTaskReturned;
+#endif
+
+#ifdef SATELLITE
+  BaseType_t xSAT_XCVR_CommandTaskReturned;
+
+  TaskHandle_t xSAT_XCVR_CommandHandle = NULL;
+#endif
+
+  xXCVRMutex = xSemaphoreCreateMutex();
+  xRXReadySemaphore = xSemaphoreCreateBinary();
+  
+
+  xXCVR_txQueue = xQueueCreate(10, sizeof(data_packet_s));
+  xXCVR_rxQueue = xQueueCreate(10, sizeof(data_packet_s));
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -102,18 +167,18 @@ int main(void)
 
   /* USER CODE BEGIN Init */
   xTransmitTaskReturned = xTaskCreate(
-                            vTransmitTask,
+                            vXCVR_TXTask,
                             "Transmit",
-                            TRANSMIT_STACK_SIZE,
+                            XCVR_TX_STACK_SIZE,
                             NULL,
                             2,
                             &xTransmitHandle);
 
   
-  xReceiveTaskReturned = xTaskCreate(
-                          vReceiveTask,
-                          "Receive",
-                          RECEIVE_STACK_SIZE,
+  xXCVR_RXTaskReturned = xTaskCreate(
+                          vXCVR_RXTask,
+                          "XCVR_RX",
+                          XCVR_RX_STACK_SIZE,
                           NULL,
                           1,
                           &xReceiveHandle);
@@ -126,7 +191,36 @@ int main(void)
                               3,
                               &xADCSCommandHandle);
   
-    
+#ifdef BASE_STATION
+
+  xUSBTransmitTaskReturned = xTaskCreate(
+                              vUSBTransmitTask,
+                              "USBTransmit",
+                              USB_TRANSMIT_STACK_SIZE,
+                              NULL,
+                              2,
+                              &xUSBTransmitHandle);
+
+  xUSBReceiveTaskReturned = xTaskCreate(
+                              vUSBReceiveTask,
+                              "USBReceive",
+                              USB_RECEIVE_STACK_SIZE,
+                              NULL,
+                              2,
+                              &xUSBReceiveHandle);
+
+
+#endif
+#ifdef SATELLITE
+  
+  xSAT_XCVR_CommandTaskReturned = xTaskCreate(
+                              vSAT_XCVR_CommandTask,
+                              "SAT_XCVR_Command",
+                              SAT_XCVR_COMMAND_STACK_SIZE,
+                              NULL,
+                              3,
+                              &xSAT_XCVR_CommandHandle);
+#endif
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -155,18 +249,6 @@ int main(void)
   HAL_ADC_Start_DMA(&hadc1, (uint32_t *) adc_data, ADC_NUM_CONVERSIONS);
 
   HAL_TIM_Base_Start(&htim3);
-
-  data_packet_s test_packet = {
-    .length = 1,
-    .payload = { CI_CMD_GET_SENSOR_DATA }
-  };
-
-  while (1) {
-    CI_sendCommand(test_packet.payload, test_packet.length);
-    HAL_Delay(500);
-  }
-
-
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -244,19 +326,48 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-void vTransmitTask(void *pvParameters) {
-
+void vXCVR_TXTask(void *pvParameters) {
+  data_packet_s packetToSend;
   for(;;) {
 
+    // Pull a packet off the transmit queue and send it via the transceiver
+    // Should disable the input interrupt during this as the ISR will get triggered for receiving
+    xQueueReceive(xXCVR_txQueue, &packetToSend, portMAX_DELAY);
+    xSemaphoreTake(xXCVRMutex, portMAX_DELAY);
+
+    // Disable the interrupt tied to the XCVR as this gets flagged when a transmission or a reception is complete
+    HAL_NVIC_DisableIRQ(EXTI1_IRQn);
+    ADF7030_transmitPacket(&packetToSend);
+
+    // Clear the interrupt flag and re-enable the interrupt
+    __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_1);
+    HAL_NVIC_EnableIRQ(EXTI1_IRQn);
+
+    xSemaphoreGive(xXCVRMutex);
   }
 
   vTaskDelete(NULL);
 }
 
-void vReceiveTask(void * pvParameters) {
+void vXCVR_RXTask(void * pvParameters) {
 
+  data_packet_s receivedPacket;
   for(;;) {
 
+    // Wait until a packet has been received, then read it
+    xSemaphoreTake(xRXReadySemaphore, portMAX_DELAY);
+    xSemaphoreTake(xXCVRMutex, portMAX_DELAY);
+
+    ADF7030_receivePacket(&receivedPacket);
+    xSemaphoreGive(xXCVRMutex);
+
+    // Depending on whether this is a satellite or a base station, push the received packet to the appropriate queue for processing
+#ifdef BASE_STATION
+    xQueueSend(xUSB_txQueue, &receivedPacket, portMAX_DELAY);
+#endif
+#ifdef SATELLITE
+    xQueueSend(xXCVR_rxQueue, &receivedPacket, portMAX_DELAY);
+#endif
   }
 
   vTaskDelete(NULL);
@@ -271,10 +382,74 @@ void vADCSCommandTask(void * pvParameters) {
   vTaskDelete(NULL);
 }
 
+#ifdef BASE_STATION
+void vUSBReceiveTask(void *pvParameters) {
+
+  uint8_t cmdBuf[USB_RX_BUF_SIZE];
+  uint32_t cmdLen;
+
+  for(;;) {
+
+    // Wait until a packet has been received over USB, then push it to the USB receive queue
+    xSemaphoreTake(xUSBReceiveSemaphore, portMAX_DELAY);
+
+    // Copy usb data to a local buffer
+    cmdLen = usbRxLen;
+    memcpy(cmdBuf, UserRxBufferFS, cmdLen);
+
+    // Re-arm USB
+    USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &UserRxBufferFS[0]);
+    USBD_CDC_ReceivePacket(&hUsbDeviceFS);
+
+    // Process the command received over USB
+    CI_processCommand(cmdBuf, cmdLen);
+  }
+
+  vTaskDelete(NULL);
+}
+
+void vUSBTransmitTask(void *pvParameters) {
+
+  for(;;) {
+
+    // Wait until there is a packet to send over USB, then send it
+    data_packet_s packetToSend;
+    xQueueReceive(xUSB_txQueue, &packetToSend, portMAX_DELAY);
+
+    // Wait until the USB is ready to transmit, then send the packet over USB
+    xSemaphoreTake(xUSBMutex, portMAX_DELAY);
+    USBD_CDC_SetTxBuffer(&hUsbDeviceFS, packetToSend.payload, packetToSend.length);
+    USBD_CDC_TransmitPacket(&hUsbDeviceFS);
+    xSemaphoreGive(xUSBMutex);
+  }
+
+  vTaskDelete(NULL);
+}
+#endif
+#ifdef SATELLITE
+
+void vSAT_XCVR_CommandTask(void * pvParameters) {
+
+  for(;;) {
+
+    // Wait until there is a packet received from the transceiver, then process it
+    data_packet_s receivedPacket;
+    xQueueReceive(xXCVR_rxQueue, &receivedPacket, portMAX_DELAY);
+
+    SAT_XCVR_processCommand(&receivedPacket);
+  }
+
+  vTaskDelete(NULL);
+}
+
+#endif
+
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
   if(GPIO_Pin == GPIO_PIN_1) {
-    ADF7030_receivePacket(&receivedPacket);
-    CI_processCommand(receivedPacket.payload, receivedPacket.length);
+
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    xSemaphoreGiveFromISR(xRXReadySemaphore, &xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
   }
 }
 
@@ -284,6 +459,8 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
     current_temperature = temp_sensor_ADCToTemperature(adc_data[1]);
   }
 }
+
+
 
 /* USER CODE END 4 */
 
