@@ -44,13 +44,13 @@ extern "C" {
 
 #define ADCS_COMMAND_STACK_SIZE 128
 #define SENSOR_STACK_SIZE 128
-#define XCVR_RX_STACK_SIZE 128
-#define XCVR_TX_STACK_SIZE 128
+#define XCVR_RX_STACK_SIZE 256
+#define XCVR_TX_STACK_SIZE 256
 
 
 #ifdef BASE_STATION
-#define USB_TRANSMIT_STACK_SIZE 128
-#define USB_RECEIVE_STACK_SIZE 128
+#define USB_TRANSMIT_STACK_SIZE 192
+#define USB_RECEIVE_STACK_SIZE 256
 #endif
 
 #ifdef SATELLITE
@@ -74,7 +74,6 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN Private defines */
 void vXCVR_TXTask(void * pvParameters);
-void vADCSCommandTask(void * pvParameters);
 void vSensorTask(void * pvParameters);
 void vXCVR_RXTask(void * pvParameters);
 #ifdef BASE_STATION

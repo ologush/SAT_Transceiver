@@ -13,5 +13,5 @@ float potentiometer_ADCToPercentage(uint32_t raw_value) {
 
     float voltage = potentiometer_ADCToVoltage(raw_value);
 
-    return voltage / VOLTAGE_REF;
+    return voltage / VOLTAGE_REF * 100.0f;
 }
