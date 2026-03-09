@@ -35,7 +35,6 @@
 #include "potentiometer.h"
 #include "usbd_cdc_if.h"
 #include "__public__ADF7030_1_fw_macro.h"
-
 #include "semphr.h"
 
 #ifdef BASE_STATION
@@ -81,7 +80,7 @@ float current_potentiometer_percentage;
 QueueHandle_t xUSB_txQueue;
 QueueHandle_t xUSB_rxQueue;
 
-static SemaphoreHandle_t xUSBMutex;
+SemaphoreHandle_t xUSBMutex;
 SemaphoreHandle_t xUSBReceiveSemaphore;
 
 extern uint8_t UserRxBufferFS[];
@@ -126,18 +125,19 @@ int main(void)
   /* USER CODE BEGIN 1 */
   BaseType_t xTransmitTaskReturned;
   BaseType_t xXCVR_RXTaskReturned;
-  BaseType_t xADCSCommandTaskReturned;
   BaseType_t xSensorTaskReturned;
 
 
   TaskHandle_t xTransmitHandle = NULL;
   TaskHandle_t xReceiveHandle = NULL;
-  TaskHandle_t xADCSCommandHandle = NULL;
   TaskHandle_t xSensorHandle = NULL;
 
 #ifdef BASE_STATION
-  xUSB_txQueue = xQueueCreate(10, sizeof(data_packet_s));
-  xUSB_rxQueue = xQueueCreate(10, sizeof(data_packet_s));
+  xUSB_txQueue = xQueueCreate(5, sizeof(data_packet_s));
+  xUSB_rxQueue = xQueueCreate(5, sizeof(data_packet_s));
+
+  xUSBMutex = xSemaphoreCreateMutex();
+  xUSBReceiveSemaphore = xSemaphoreCreateBinary();
 
   TaskHandle_t xUSBTransmitHandle = NULL;
   TaskHandle_t xUSBReceiveHandle = NULL;
@@ -156,8 +156,8 @@ int main(void)
   xRXReadySemaphore = xSemaphoreCreateBinary();
   
 
-  xXCVR_txQueue = xQueueCreate(10, sizeof(data_packet_s));
-  xXCVR_rxQueue = xQueueCreate(10, sizeof(data_packet_s));
+  xXCVR_txQueue = xQueueCreate(5, sizeof(data_packet_s));
+  xXCVR_rxQueue = xQueueCreate(5, sizeof(data_packet_s));
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -183,13 +183,6 @@ int main(void)
                           1,
                           &xReceiveHandle);
 
-  xADCSCommandTaskReturned = xTaskCreate(
-                              vADCSCommandTask,
-                              "ADCSCommand",
-                              ADCS_COMMAND_STACK_SIZE,
-                              NULL,
-                              3,
-                              &xADCSCommandHandle);
   
 #ifdef BASE_STATION
 
@@ -369,15 +362,6 @@ void vXCVR_RXTask(void * pvParameters) {
 #ifdef SATELLITE
     xQueueSend(xXCVR_rxQueue, &receivedPacket, portMAX_DELAY);
 #endif
-  }
-
-  vTaskDelete(NULL);
-}
-
-void vADCSCommandTask(void * pvParameters) {
-
-  for(;;) {
-
   }
 
   vTaskDelete(NULL);

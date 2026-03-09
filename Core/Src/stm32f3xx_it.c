@@ -22,6 +22,8 @@
 #include "stm32f3xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "FreeRTOS.h"
+#include "task.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -211,7 +213,6 @@ void ADC1_2_IRQHandler(void)
 void USB_LP_CAN_RX0_IRQHandler(void)
 {
   /* USER CODE BEGIN USB_LP_CAN_RX0_IRQn 0 */
-
   /* USER CODE END USB_LP_CAN_RX0_IRQn 0 */
   HAL_PCD_IRQHandler(&hpcd_USB_FS);
   /* USER CODE BEGIN USB_LP_CAN_RX0_IRQn 1 */
@@ -234,5 +235,12 @@ void TIM6_DAC_IRQHandler(void)
 }
 
 /* USER CODE BEGIN 1 */
+extern void xPortSysTickHandler(void);
 
+void SysTick_Handler(void)
+{
+  if (xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED) {
+    xPortSysTickHandler();
+  }
+}
 /* USER CODE END 1 */

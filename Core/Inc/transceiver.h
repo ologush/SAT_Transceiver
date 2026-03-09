@@ -7,6 +7,8 @@
 #define ADF7030_GPIO_RESET_REG  0x40000820UL
 #define ADF7030_GPIO_SET_REG    0x4000081CUL
 
+#define DATA_PACKET_MAX_PAYLOAD_SIZE 32
+
 #define LOAD_CONFIG
 #define CALIBRATE
 
@@ -19,9 +21,8 @@ typedef enum {
 } TRANSCEIVER_ERR_e;
 
 typedef struct {
-    uint8_t header;
     uint8_t length;
-    uint8_t payload[128];
+    uint8_t payload[DATA_PACKET_MAX_PAYLOAD_SIZE];
 } data_packet_s;
 
 typedef struct {

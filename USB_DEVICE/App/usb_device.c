@@ -64,7 +64,15 @@ USBD_HandleTypeDef hUsbDeviceFS;
 void MX_USB_DEVICE_Init(void)
 {
   /* USER CODE BEGIN USB_DEVICE_Init_PreTreatment */
-
+  /* Force USB disconnect so the host re-enumerates on every reset.
+     A debugger VECTRESET leaves the USB peripheral running with D+ high,
+     so the host never sends USB_RESET and CDC_Init_FS is never called.
+     Setting PDWN powers down the USB transceiver and pulls D+ low,
+     forcing the host to detect a disconnect and re-enumerate. */
+  __HAL_RCC_USB_CLK_ENABLE();
+  USB->CNTR = USB_CNTR_PDWN;
+  HAL_Delay(100);
+  /* USBD_Init -> USB_DevInit will write CNTR = FRES then CNTR = 0, clearing PDWN */
   /* USER CODE END USB_DEVICE_Init_PreTreatment */
 
   /* Init Device Library, add supported class and start the library. */
