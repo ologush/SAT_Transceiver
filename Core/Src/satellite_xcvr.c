@@ -27,7 +27,7 @@ SAT_XCVR_ERR_e SAT_XCVR_processCommand(data_packet_s *packet) {
             HAL_USART_Transmit(&husart1, packet->payload, packet->length, USART_TIMEOUT);
             HAL_USART_Receive(&husart1, &response, 1, USART_TIMEOUT); 
 
-            CMD_e responseCmd = (response == 0) ? CMD_RESP_ACK : CMD_RESP_NACK;
+            CMD_e responseCmd = (response == CMD_RESP_ACK) ? CMD_RESP_ACK : CMD_RESP_NACK;
             data_packet_s responsePacket;
             responsePacket.payload[0] = (uint8_t)responseCmd;
             responsePacket.payload[1] = cmd;
