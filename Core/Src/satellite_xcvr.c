@@ -45,7 +45,7 @@ SAT_XCVR_ERR_e SAT_XCVR_processCommand(data_packet_s *packet) {
             HAL_USART_Transmit(&husart1, packet->payload, packet->length, USART_TIMEOUT);
             HAL_USART_Receive(&husart1, &response, 1, USART_TIMEOUT);
 
-            CMD_e responseCmd = (response == 0) ? CMD_RESP_ACK : CMD_RESP_NACK;
+            CMD_e responseCmd = (response == CMD_RESP_ACK) ? CMD_RESP_ACK : CMD_RESP_NACK;
             data_packet_s responsePacket;
             responsePacket.payload[0] = (uint8_t)responseCmd;
             responsePacket.payload[1] = cmd;
@@ -57,7 +57,7 @@ SAT_XCVR_ERR_e SAT_XCVR_processCommand(data_packet_s *packet) {
         }
 
             
-        case CMD_GET_SAT_SENSOR_DATA: {
+        case CMD_GET_SAT_TELEMETRY_DATA: {
             
             uint8_t usartResponse[ADCS_SENSOR_DATA_RESPONSE_SIZE];
 
@@ -68,7 +68,7 @@ SAT_XCVR_ERR_e SAT_XCVR_processCommand(data_packet_s *packet) {
             float current_temp;
             data_packet_s responsePacket;   
 
-            responsePacket.payload[0] = CMD_RESP_SAT_SENSOR_DATA;
+            responsePacket.payload[0] = CMD_RESP_SAT_TELEMETRY_DATA;
 
             // ADF7030 temperature for the response
             ADF7030_getTemperature(&current_temp);
