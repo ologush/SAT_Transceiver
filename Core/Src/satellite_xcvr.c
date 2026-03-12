@@ -13,7 +13,7 @@ extern QueueHandle_t xXCVR_txQueue;
 extern float current_temperature;
 extern float current_potentiometer_percentage;
 
-extern USART_HandleTypeDef husart1;
+extern UART_HandleTypeDef huart1;
 
 SAT_XCVR_ERR_e SAT_XCVR_processCommand(data_packet_s *packet) {
 
@@ -24,8 +24,8 @@ SAT_XCVR_ERR_e SAT_XCVR_processCommand(data_packet_s *packet) {
 
             uint8_t response;
             // Pass along the set ADCS mode command to the ADCS over USART, should implement an ACK as well
-            HAL_USART_Transmit(&husart1, packet->payload, packet->length, USART_TIMEOUT);
-            HAL_USART_Receive(&husart1, &response, 1, USART_TIMEOUT); 
+            HAL_UART_Transmit(&huart1, packet->payload, packet->length, USART_TIMEOUT);
+            HAL_UART_Receive(&huart1, &response, 1, USART_TIMEOUT); 
 
             CMD_e responseCmd = (response == CMD_RESP_ACK) ? CMD_RESP_ACK : CMD_RESP_NACK;
             data_packet_s responsePacket;
@@ -42,8 +42,8 @@ SAT_XCVR_ERR_e SAT_XCVR_processCommand(data_packet_s *packet) {
 
             uint8_t response;
             // Pass along the set ADCS target command to the ADCS over USART, should implement an ACK as well
-            HAL_USART_Transmit(&husart1, packet->payload, packet->length, USART_TIMEOUT);
-            HAL_USART_Receive(&husart1, &response, 1, USART_TIMEOUT);
+            HAL_UART_Transmit(&huart1, packet->payload, packet->length, USART_TIMEOUT);
+            HAL_UART_Receive(&huart1, &response, 1, USART_TIMEOUT);
 
             CMD_e responseCmd = (response == CMD_RESP_ACK) ? CMD_RESP_ACK : CMD_RESP_NACK;
             data_packet_s responsePacket;
@@ -62,8 +62,9 @@ SAT_XCVR_ERR_e SAT_XCVR_processCommand(data_packet_s *packet) {
             uint8_t usartResponse[ADCS_SENSOR_DATA_RESPONSE_SIZE];
 
             // Solicit the sensor data from the ADCS over USART
-            HAL_USART_Transmit(&husart1, packet->payload, packet->length, USART_TIMEOUT);
-            HAL_USART_Receive(&husart1, usartResponse, ADCS_SENSOR_DATA_RESPONSE_SIZE, USART_TIMEOUT);
+            HAL_StatusTypeDef status;
+            status = HAL_UART_Transmit(&huart1, packet->payload, packet->length, USART_TIMEOUT);
+            status = HAL_UART_Receive(&huart1, usartResponse, ADCS_SENSOR_DATA_RESPONSE_SIZE, USART_TIMEOUT);
 
             float current_temp;
             data_packet_s responsePacket;   
