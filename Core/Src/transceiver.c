@@ -1,6 +1,8 @@
 #include "transceiver.h"
 #include "adi_adf7030-1_reg.h"
 #include "gpio.h"
+#include "commands.h"
+#include <string.h>
 
 #define CRC_LEN      2 //Byte
 #define SYNC_LEN     1 //Bytes
@@ -355,19 +357,26 @@ TRANSCEIVER_ERR_e ADF7030_transmitPacket(data_packet_s *packet) {
         uint32_t word;
     } reg_data_u;
 
+    uint8_t command = 0x38;
+
+    // Calculate the padding for the write to SPI as data needs to be written in 4 byte blocks
+    uint32_t padded_len = 4 - (packet->length % 4) + packet->length;
+
     // Set the packet length
     ADF7030_memoryRead(GENERIC_PKT_FRAME_CFG1_Addr, reg_data_u.arr, 4);
-    reg_data_u.word = (reg_data_u.word & 0xFFFFF000) | packet->length;
+    reg_data_u.word = (reg_data_u.word & 0xFFFFF000) | padded_len;
     ADF7030_memoryWrite(GENERIC_PKT_FRAME_CFG1_Addr, reg_data_u.arr, 4);
 
-    // Write the packet to the TX buffer
     reg_data_u.word = ADF7030_alignWord(TX_PACKET_MEMORY);
-    uint8_t command = 0x38;
+
+    uint8_t padded_payload[padded_len];
+    memcpy(padded_payload, packet->payload, packet->length);
+    memset(padded_payload + packet->length, 0, padded_len - packet->length);
 
     HAL_GPIO_WritePin(transceiver.cs_port, transceiver.cs_pin, GPIO_PIN_RESET);
     HAL_SPI_Transmit(transceiver.hspi, &command, 1, transceiver.spi_timeout);
     HAL_SPI_Transmit(transceiver.hspi, reg_data_u.arr, 4, transceiver.spi_timeout);
-    HAL_SPI_Transmit(transceiver.hspi, packet->payload, packet->length, transceiver.spi_timeout);
+    HAL_SPI_Transmit(transceiver.hspi, padded_payload, padded_len, transceiver.spi_timeout);
     HAL_GPIO_WritePin(transceiver.cs_port, transceiver.cs_pin, GPIO_PIN_SET);
 
     // Switch the RF switch to TX mode and transition to the TX state to transmit the packet
@@ -449,16 +458,6 @@ TRANSCEIVER_ERR_e ADF7030_radioSettings() {
 
     ADF7030_memoryRead(PROFILE_PACKET_CFG_Addr, reg_data_u.arr, 4);
 
-    //Currently in wideband mode
-    ADF7030_memoryRead(PROFILE_RADIO_MODES_Addr, reg_data_u.arr, 4);
-    //Power settings
-    ADF7030_memoryRead(PROFILE_RADIO_DIG_TX_CFG0_Addr, reg_data_u.arr, 4);
-
-    ADF7030_memoryRead(PROFILE_RADIO_DIG_TX_CFG1_Addr, reg_data_u.arr, 4);
-    //LDO
-    ADF7030_memoryRead(PROFILE_RADIO_DIG_TX_CFG2_Addr, reg_data_u.arr, 4);
-
-    ADF7030_memoryRead(PROFILE_RADIO_AFC_CFG2_Addr, reg_data_u.arr, 4);
 
     return TRANSCEIVER_ERR_OK;
 
@@ -474,7 +473,12 @@ TRANSCEIVER_ERR_e ADF7030_receivePacket(data_packet_s *packet) {
     // Read the length of the received packet
     ADF7030_memoryRead(GENERIC_PKT_FRAME_CFG3_Addr, reg_data_u.arr, 4);
     // Subtract the CRC length from the total length to get the actual data length
-    reg_data_u.word = (reg_data_u.word >> 16) - CRC_LEN;
+    uint32_t rx_len = (reg_data_u.word >> 16);
+    if (rx_len < CRC_LEN || (rx_len - CRC_LEN) > DATA_PACKET_MAX_PAYLOAD_SIZE) {
+        ADF7030_transitionState(ADF7030_PHY_RX);
+        return TRANSCEIVER_ERR_ERROR;
+    }
+    reg_data_u.word = rx_len - CRC_LEN;
     packet->length = reg_data_u.word;
 
     // Read the received packet from the RX buffer, store it in the packet payload

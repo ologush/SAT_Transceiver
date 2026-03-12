@@ -36,6 +36,7 @@
 #include "usbd_cdc_if.h"
 #include "__public__ADF7030_1_fw_macro.h"
 #include "semphr.h"
+#include "commands.h"
 
 #ifdef BASE_STATION
 #include "computer_interface.h"
@@ -331,6 +332,7 @@ void vXCVR_TXTask(void *pvParameters) {
 
     // Disable the interrupt tied to the XCVR as this gets flagged when a transmission or a reception is complete
     HAL_NVIC_DisableIRQ(EXTI1_IRQn);
+
     ADF7030_transmitPacket(&packetToSend);
 
     // Clear the interrupt flag and re-enable the interrupt
@@ -352,8 +354,12 @@ void vXCVR_RXTask(void * pvParameters) {
     xSemaphoreTake(xRXReadySemaphore, portMAX_DELAY);
     xSemaphoreTake(xXCVRMutex, portMAX_DELAY);
 
-    ADF7030_receivePacket(&receivedPacket);
+    TRANSCEIVER_ERR_e result = ADF7030_receivePacket(&receivedPacket);
     xSemaphoreGive(xXCVRMutex);
+
+    if (result != TRANSCEIVER_ERR_OK) {
+      continue;
+    }
 
     // Depending on whether this is a satellite or a base station, push the received packet to the appropriate queue for processing
 #ifdef BASE_STATION

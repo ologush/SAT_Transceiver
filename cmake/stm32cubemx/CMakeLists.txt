@@ -9,7 +9,7 @@ enable_language(C ASM)
 target_compile_definitions(stm32cubemx INTERFACE 
 	USE_HAL_DRIVER 
 	STM32F302xC
-    BASE_STATION
+    SATELLITE
     $<$<CONFIG:Debug>:DEBUG>
 )
 

@@ -54,7 +54,7 @@ extern "C" {
 #endif
 
 #ifdef SATELLITE
-#define SAT_XCVR_COMMAND_STACK_SIZE 128
+#define SAT_XCVR_COMMAND_STACK_SIZE 512
 #endif
 /* USER CODE END EC */
 
