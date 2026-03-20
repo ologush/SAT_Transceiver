@@ -91,7 +91,7 @@ uint32_t usbRxLen;
 #ifdef SATELLITE
 QueueHandle_t xUART_txQueue;
 QueueHandle_t xUART_rxQueue;
-
+SemaphoreHandle_t xUARTRxSemaphore;
 #endif
 
 QueueHandle_t xXCVR_txQueue;
@@ -149,6 +149,8 @@ int main(void)
   BaseType_t xSAT_XCVR_CommandTaskReturned;
 
   TaskHandle_t xSAT_XCVR_CommandHandle = NULL;
+
+  xUARTRxSemaphore = xSemaphoreCreateBinary();
 #endif
 
   xXCVRMutex = xSemaphoreCreateMutex();
@@ -158,7 +160,7 @@ int main(void)
   xXCVR_txQueue = xQueueCreate(5, sizeof(data_packet_s));
   xXCVR_rxQueue = xQueueCreate(5, sizeof(data_packet_s));
   /* USER CODE END 1 */
-  __HAL_DBGMCU_FREEZE_TIM6();
+
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
@@ -250,7 +252,6 @@ int main(void)
   MX_FREERTOS_Init();
 
   /* Start scheduler */
-  HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_12);
   osKernelStart();
 
   /* We should never get here as control is now taken by the scheduler */
@@ -449,8 +450,15 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
   }
 }
 
-
-
+#ifdef SATELLITE
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+  if (huart->Instance == USART1) {
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    xSemaphoreGiveFromISR(xUARTRxSemaphore, &xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+  }
+}
+#endif
 /* USER CODE END 4 */
 
 /**
