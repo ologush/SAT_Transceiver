@@ -79,7 +79,6 @@ float current_potentiometer_percentage;
 
 #ifdef BASE_STATION
 QueueHandle_t xUSB_txQueue;
-QueueHandle_t xUSB_rxQueue;
 
 SemaphoreHandle_t xUSBMutex;
 SemaphoreHandle_t xUSBReceiveSemaphore;
@@ -135,7 +134,6 @@ int main(void)
 
 #ifdef BASE_STATION
   xUSB_txQueue = xQueueCreate(5, sizeof(data_packet_s));
-  xUSB_rxQueue = xQueueCreate(5, sizeof(data_packet_s));
 
   xUSBMutex = xSemaphoreCreateMutex();
   xUSBReceiveSemaphore = xSemaphoreCreateBinary();
@@ -160,7 +158,7 @@ int main(void)
   xXCVR_txQueue = xQueueCreate(5, sizeof(data_packet_s));
   xXCVR_rxQueue = xQueueCreate(5, sizeof(data_packet_s));
   /* USER CODE END 1 */
-
+  __HAL_DBGMCU_FREEZE_TIM6();
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
@@ -234,7 +232,6 @@ int main(void)
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
   MX_USB_DEVICE_Init();
-
   // Turn on XCVR power
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, GPIO_PIN_SET);
 
@@ -253,6 +250,7 @@ int main(void)
   MX_FREERTOS_Init();
 
   /* Start scheduler */
+  HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_12);
   osKernelStart();
 
   /* We should never get here as control is now taken by the scheduler */

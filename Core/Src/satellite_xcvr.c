@@ -7,7 +7,7 @@
 #include "string.h"
 
 #define ADCS_SENSOR_DATA_RESPONSE_SIZE 12
-#define USART_TIMEOUT 100
+#define UART_TIMEOUT 10000
 
 extern QueueHandle_t xXCVR_txQueue;
 extern float current_temperature;
@@ -23,9 +23,9 @@ SAT_XCVR_ERR_e SAT_XCVR_processCommand(data_packet_s *packet) {
         case CMD_SET_ADCS_MODE: {
 
             uint8_t response;
-            // Pass along the set ADCS mode command to the ADCS over USART, should implement an ACK as well
-            HAL_UART_Transmit(&huart1, packet->payload, packet->length, USART_TIMEOUT);
-            HAL_UART_Receive(&huart1, &response, 1, USART_TIMEOUT); 
+            // Pass along the set ADCS mode command to the ADCS over UART, should implement an ACK as well
+            HAL_UART_Transmit(&huart1, packet->payload, packet->length, UART_TIMEOUT);
+            HAL_UART_Receive(&huart1, &response, 1, UART_TIMEOUT); 
 
             CMD_e responseCmd = (response == CMD_RESP_ACK) ? CMD_RESP_ACK : CMD_RESP_NACK;
             data_packet_s responsePacket;
@@ -41,9 +41,9 @@ SAT_XCVR_ERR_e SAT_XCVR_processCommand(data_packet_s *packet) {
         case CMD_SET_ADCS_TARGET: {
 
             uint8_t response;
-            // Pass along the set ADCS target command to the ADCS over USART, should implement an ACK as well
-            HAL_UART_Transmit(&huart1, packet->payload, packet->length, USART_TIMEOUT);
-            HAL_UART_Receive(&huart1, &response, 1, USART_TIMEOUT);
+            // Pass along the set ADCS target command to the ADCS over UART, should implement an ACK as well
+            HAL_UART_Transmit(&huart1, packet->payload, packet->length, UART_TIMEOUT);
+            HAL_UART_Receive(&huart1, &response, 1, UART_TIMEOUT);
 
             CMD_e responseCmd = (response == CMD_RESP_ACK) ? CMD_RESP_ACK : CMD_RESP_NACK;
             data_packet_s responsePacket;
@@ -59,26 +59,26 @@ SAT_XCVR_ERR_e SAT_XCVR_processCommand(data_packet_s *packet) {
             
         case CMD_GET_SAT_TELEMETRY_DATA: {
             
-            uint8_t usartResponse[ADCS_SENSOR_DATA_RESPONSE_SIZE];
+            uint8_t uartResponse[ADCS_SENSOR_DATA_RESPONSE_SIZE] = {0};
 
-            // Solicit the sensor data from the ADCS over USART
+            // Solicit the sensor data from the ADCS over UART
             HAL_StatusTypeDef status;
-            status = HAL_UART_Transmit(&huart1, packet->payload, packet->length, USART_TIMEOUT);
-            status = HAL_UART_Receive(&huart1, usartResponse, ADCS_SENSOR_DATA_RESPONSE_SIZE, USART_TIMEOUT);
+            status = HAL_UART_Transmit(&huart1, packet->payload, packet->length, UART_TIMEOUT);
+            status = HAL_UART_Receive(&huart1, uartResponse, ADCS_SENSOR_DATA_RESPONSE_SIZE, UART_TIMEOUT);
 
-            float current_temp;
+            float current_xcvr_temp;
             data_packet_s responsePacket;   
 
             responsePacket.payload[0] = CMD_RESP_SAT_TELEMETRY_DATA;
 
             // ADF7030 temperature for the response
-            ADF7030_getTemperature(&current_temp);
+            ADF7030_getTemperature(&current_xcvr_temp);
 
-            floatToBytes(current_temp, &responsePacket.payload[1]);
+            floatToBytes(current_xcvr_temp, &responsePacket.payload[1]);
             floatToBytes(current_temperature, &responsePacket.payload[5]);
             floatToBytes(current_potentiometer_percentage, &responsePacket.payload[9]);
 
-            memcpy(&responsePacket.payload[13], usartResponse, ADCS_SENSOR_DATA_RESPONSE_SIZE);
+            memcpy(&responsePacket.payload[13], uartResponse, ADCS_SENSOR_DATA_RESPONSE_SIZE);
 
             responsePacket.length = 13 + ADCS_SENSOR_DATA_RESPONSE_SIZE;
 
