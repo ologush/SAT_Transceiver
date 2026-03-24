@@ -4,5 +4,6 @@
 #include <stdint.h>
 
 void floatToBytes(float value, uint8_t *bytes);
+float bytesToFloat(uint8_t *bytes);
 
 #endif
