@@ -362,23 +362,6 @@ void vXCVR_RXTask(void * pvParameters) {
 
     // Depending on whether this is a satellite or a base station, push the received packet to the appropriate queue for processing
 #ifdef BASE_STATION
-    
-    // Set the correct packet lengths to send over USB
-    switch(receivedPacket.payload[0]) {
-      case CMD_RESP_SAT_TELEMETRY_DATA:
-      
-        receivedPacket.length = SAT_SENSOR_DATA_RESPONSE_SIZE;
-        break;
-
-      case CMD_RESP_BASE_SENSOR_DATA:
-
-        receivedPacket.length = BASE_SENSOR_DATA_LEN;
-        break;
-      
-      default:
-        break;
-    }
-
     xQueueSend(xUSB_txQueue, &receivedPacket, portMAX_DELAY);
 #endif
 #ifdef SATELLITE

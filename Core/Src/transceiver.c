@@ -50,7 +50,6 @@ static TRANSCEIVER_ERR_e SPI_host_initialization(ADF7030_s *target, uint32_t tim
 static TRANSCEIVER_ERR_e ADF7030_alignMultipleWords(uint8_t *data, uint32_t nwords, uint8_t *aligned_data);
 static TRANSCEIVER_ERR_e ADF7030_RFswitchTX(void);
 static TRANSCEIVER_ERR_e ADF7030_RFswitchRX(void);
-static TRANSCEIVER_ERR_e ADF7030_readTXBuff(uint8_t *outputBuff, uint8_t nbytes);
 
 static uint32_t ADF7030_alignWord(uint32_t address);
 
@@ -328,9 +327,6 @@ TRANSCEIVER_ERR_e ADF7030_getTemperature(float *temp) {
 
     ADF7030_transitionState(ADF7030_MON);
 
-    // Wait for MON to complete — ADF7030 transitions back to PHY_ON when done
-    while(ADF7030_getState() != ADF7030_PHY_ON) {}
-
     union {
         uint8_t arr[4];
         uint32_t u_word;
@@ -346,8 +342,6 @@ TRANSCEIVER_ERR_e ADF7030_getTemperature(float *temp) {
     }
 
     *temp = 0.0625f * (float) temp_data.word;
-
-    ADF7030_transitionState(ADF7030_PHY_RX);
 
     return TRANSCEIVER_ERR_OK;
 }
@@ -378,14 +372,12 @@ TRANSCEIVER_ERR_e ADF7030_transmitPacket(data_packet_s *packet) {
     uint8_t padded_payload[padded_len];
     memcpy(padded_payload, packet->payload, packet->length);
     memset(padded_payload + packet->length, 0, padded_len - packet->length);
-    
+
     HAL_GPIO_WritePin(transceiver.cs_port, transceiver.cs_pin, GPIO_PIN_RESET);
     HAL_SPI_Transmit(transceiver.hspi, &command, 1, transceiver.spi_timeout);
     HAL_SPI_Transmit(transceiver.hspi, reg_data_u.arr, 4, transceiver.spi_timeout);
     HAL_SPI_Transmit(transceiver.hspi, padded_payload, padded_len, transceiver.spi_timeout);
     HAL_GPIO_WritePin(transceiver.cs_port, transceiver.cs_pin, GPIO_PIN_SET);
-
-
 
     // Switch the RF switch to TX mode and transition to the TX state to transmit the packet
     ADF7030_RFswitchTX();
@@ -400,10 +392,6 @@ TRANSCEIVER_ERR_e ADF7030_transmitPacket(data_packet_s *packet) {
         }
     }
 
-    uint8_t testRetreivalBuff[24] = {0};
-
-    ADF7030_readTXBuff(testRetreivalBuff, 24);
-
     // Switch the RF switch back to RX mode
     ADF7030_RFswitchRX();
 
@@ -413,27 +401,6 @@ TRANSCEIVER_ERR_e ADF7030_transmitPacket(data_packet_s *packet) {
     ADF7030_memoryWrite(IRQ_CTRL_STATUS1_Addr, reg_data_u.arr, 4);
 
     return TRANSCEIVER_ERR_OK;
-}
-
-static TRANSCEIVER_ERR_e ADF7030_readTXBuff(uint8_t *outputBuff, uint8_t nbytes) {
-
-    union {
-        uint8_t arr[4];
-        uint32_t word;
-    } reg_data_u;
-
-    reg_data_u.word = ADF7030_alignWord(TX_PACKET_MEMORY);
-
-    uint8_t command = 0x78;
-
-    HAL_GPIO_WritePin(transceiver.cs_port, transceiver.cs_pin, GPIO_PIN_RESET);
-    HAL_SPI_Transmit(transceiver.hspi, &command, 1, transceiver.spi_timeout);
-    // Adding the extra two bytes to transmit nonsense so that we can start receiving the data on the Receive call
-    HAL_SPI_Transmit(transceiver.hspi, reg_data_u.arr, 6, transceiver.spi_timeout);
-    HAL_SPI_Receive(transceiver.hspi, outputBuff, nbytes, transceiver.spi_timeout);
-    HAL_GPIO_WritePin(transceiver.cs_port, transceiver.cs_pin, GPIO_PIN_SET);
-
-
 }
 
 TRANSCEIVER_ERR_e ADF7030_radioSettings() {

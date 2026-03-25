@@ -7,7 +7,7 @@
 #include "string.h"
 #include "semphr.h"
 
-
+#define ADCS_SENSOR_DATA_RESPONSE_SIZE 12
 #define UART_TIMEOUT 10000
 
 extern QueueHandle_t xXCVR_txQueue;
@@ -30,7 +30,7 @@ SAT_XCVR_ERR_e SAT_XCVR_processCommand(data_packet_s *packet) {
             HAL_UART_Transmit(&huart1, packet->payload, packet->length, UART_TIMEOUT);
             if (xSemaphoreTake(xUARTRxSemaphore, pdMS_TO_TICKS(UART_TIMEOUT)) != pdTRUE) {
                 HAL_UART_DMAStop(&huart1);
-                memset(&uartResponse, 0, 1);
+                memset(&uartResponse, 0, ADCS_SENSOR_DATA_RESPONSE_SIZE);
             }
 
             CMD_e responseCmd = (uartResponse == CMD_RESP_ACK) ? CMD_RESP_ACK : CMD_RESP_NACK;
@@ -52,7 +52,7 @@ SAT_XCVR_ERR_e SAT_XCVR_processCommand(data_packet_s *packet) {
             HAL_UART_Transmit(&huart1, packet->payload, packet->length, UART_TIMEOUT);
             if (xSemaphoreTake(xUARTRxSemaphore, pdMS_TO_TICKS(UART_TIMEOUT)) != pdTRUE) {
                 HAL_UART_DMAStop(&huart1);
-                memset(&uartResponse, 0, 1);
+                memset(&uartResponse, 0, ADCS_SENSOR_DATA_RESPONSE_SIZE);
             }
 
             CMD_e responseCmd = (uartResponse == CMD_RESP_ACK) ? CMD_RESP_ACK : CMD_RESP_NACK;
@@ -89,21 +89,15 @@ SAT_XCVR_ERR_e SAT_XCVR_processCommand(data_packet_s *packet) {
             responsePacket.payload[0] = CMD_RESP_SAT_TELEMETRY_DATA;
 
             // ADF7030 temperature for the response
-            //ADF7030_getTemperature(&current_xcvr_temp);
+            ADF7030_getTemperature(&current_xcvr_temp);
 
-            //floatToBytes(current_xcvr_temp, &responsePacket.payload[1]);
-            floatToBytes(current_temperature, &responsePacket.payload[1]);
-            floatToBytes(current_potentiometer_percentage, &responsePacket.payload[5]);
+            floatToBytes(current_xcvr_temp, &responsePacket.payload[1]);
+            floatToBytes(current_temperature, &responsePacket.payload[5]);
+            floatToBytes(current_potentiometer_percentage, &responsePacket.payload[9]);
 
-            memcpy(&responsePacket.payload[9], uartResponse, ADCS_SENSOR_DATA_RESPONSE_SIZE);
-            float yaw = bytesToFloat(uartResponse);
-            float yawRate = bytesToFloat(&uartResponse[4]);
-            float IMUtemp = bytesToFloat(&uartResponse[8]);
-            responsePacket.length = 9 + ADCS_SENSOR_DATA_RESPONSE_SIZE;
+            memcpy(&responsePacket.payload[13], uartResponse, ADCS_SENSOR_DATA_RESPONSE_SIZE);
 
-            uint8_t testData[21] = {0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 0x10, 0x11, 0x12, 0x13, 0x14};
-            uint8_t testData2[21] = {0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB, 0xAB};
-            memcpy(responsePacket.payload, testData2, 21);
+            responsePacket.length = 13 + ADCS_SENSOR_DATA_RESPONSE_SIZE;
 
             xQueueSend(xXCVR_txQueue, &responsePacket, portMAX_DELAY);
 

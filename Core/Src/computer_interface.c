@@ -42,7 +42,7 @@ CI_ERR_e CI_processCommand(uint8_t *buf, uint16_t len) {
             floatToBytes(current_temperature, &packet.payload[1]);
             floatToBytes(current_potentiometer_percentage, &packet.payload[5]);
 
-            packet.length = BASE_SENSOR_DATA_LEN;
+            packet.length = 9;
 
             xQueueSend(xUSB_txQueue, &packet, portMAX_DELAY);
 
