@@ -67,37 +67,40 @@ SAT_XCVR_ERR_e SAT_XCVR_processCommand(data_packet_s *packet) {
         }
 
             
-        case CMD_GET_SAT_TELEMETRY_DATA: {
-            
+        case CMD_GET_SAT_XCVR_DATA: {
+
+            data_packet_s responsePacket;
+
+            responsePacket.payload[0] = CMD_RESP_SAT_XCVR_DATA;
+
+            floatToBytes(current_temperature, &responsePacket.payload[1]);
+            floatToBytes(current_potentiometer_percentage, &responsePacket.payload[5]);
+
+            responsePacket.length = 13;
+
+            xQueueSend(xXCVR_txQueue, &responsePacket, portMAX_DELAY);
+
+            break;
+        }
+
+        case CMD_GET_SAT_ADCS_DATA: {
+
             uint8_t uartResponse[ADCS_SENSOR_DATA_RESPONSE_SIZE];
 
-            // Solicit the sensor data from the ADCS over UART
-            HAL_StatusTypeDef status;
-
-            // Only send the command byte - packet->length includes RF padding zeros
             uint8_t adcs_cmd = packet->payload[0];
             HAL_UART_Receive_DMA(&huart1, uartResponse, ADCS_SENSOR_DATA_RESPONSE_SIZE);
-            status = HAL_UART_Transmit(&huart1, &adcs_cmd, 1, UART_TIMEOUT);
+            HAL_UART_Transmit(&huart1, &adcs_cmd, 1, UART_TIMEOUT);
 
             if (xSemaphoreTake(xUARTRxSemaphore, pdMS_TO_TICKS(UART_TIMEOUT)) != pdTRUE) {
                 HAL_UART_DMAStop(&huart1);
                 memset(uartResponse, 0, ADCS_SENSOR_DATA_RESPONSE_SIZE);
             }
-            float current_xcvr_temp;
-            data_packet_s responsePacket;   
 
-            responsePacket.payload[0] = CMD_RESP_SAT_TELEMETRY_DATA;
+            data_packet_s responsePacket;
 
-            // ADF7030 temperature for the response
-            ADF7030_getTemperature(&current_xcvr_temp);
-
-            floatToBytes(current_xcvr_temp, &responsePacket.payload[1]);
-            floatToBytes(current_temperature, &responsePacket.payload[5]);
-            floatToBytes(current_potentiometer_percentage, &responsePacket.payload[9]);
-
-            memcpy(&responsePacket.payload[13], uartResponse, ADCS_SENSOR_DATA_RESPONSE_SIZE);
-
-            responsePacket.length = 13 + ADCS_SENSOR_DATA_RESPONSE_SIZE;
+            responsePacket.payload[0] = CMD_RESP_SAT_ADCS_DATA;
+            memcpy(&responsePacket.payload[1], uartResponse, ADCS_SENSOR_DATA_RESPONSE_SIZE);
+            responsePacket.length = 1 + ADCS_SENSOR_DATA_RESPONSE_SIZE;
 
             xQueueSend(xXCVR_txQueue, &responsePacket, portMAX_DELAY);
 

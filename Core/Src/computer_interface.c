@@ -48,10 +48,18 @@ CI_ERR_e CI_processCommand(uint8_t *buf, uint16_t len) {
 
             break;
         
-        case CMD_GET_SAT_TELEMETRY_DATA:
+        case CMD_GET_SAT_XCVR_DATA:
 
             packet.length = 1;
-            packet.payload[0] = (uint8_t)CMD_GET_SAT_TELEMETRY_DATA;
+            packet.payload[0] = (uint8_t)CMD_GET_SAT_XCVR_DATA;
+            xQueueSend(xXCVR_txQueue, &packet, portMAX_DELAY);
+
+            break;
+
+        case CMD_GET_SAT_ADCS_DATA:
+
+            packet.length = 1;
+            packet.payload[0] = (uint8_t)CMD_GET_SAT_ADCS_DATA;
             xQueueSend(xXCVR_txQueue, &packet, portMAX_DELAY);
 
             break;
