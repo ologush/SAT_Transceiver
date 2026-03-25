@@ -107,7 +107,7 @@ static SemaphoreHandle_t xRXReadySemaphore;
 void SystemClock_Config(void);
 void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN PFP */
-
+static void formatPacketForUSB(data_packet_s *packetToSend);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -406,6 +406,8 @@ void vUSBTransmitTask(void *pvParameters) {
     data_packet_s packetToSend;
     xQueueReceive(xUSB_txQueue, &packetToSend, portMAX_DELAY);
 
+    formatPacketForUSB(&packetToSend);
+
     // Wait until the USB is ready to transmit, then send the packet over USB
     xSemaphoreTake(xUSBMutex, portMAX_DELAY);
     USBD_CDC_SetTxBuffer(&hUsbDeviceFS, packetToSend.payload, packetToSend.length);
@@ -459,6 +461,18 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
   }
 }
 #endif
+
+// Add a start of frame marker to the packets
+static void formatPacketForUSB(data_packet_s *packetToSend) {
+
+  uint8_t newPacket[packetToSend->length + 2];
+  newPacket[0] = 0xAA;
+  newPacket[1] = 0x55;
+
+  memcpy(&newPacket[2], packetToSend->payload, packetToSend->length);
+  memcpy(packetToSend->payload, newPacket, packetToSend->length + 2);
+
+}
 /* USER CODE END 4 */
 
 /**
