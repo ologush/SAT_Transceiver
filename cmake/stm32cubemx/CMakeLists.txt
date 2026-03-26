@@ -39,7 +39,6 @@ target_sources(stm32cubemx INTERFACE
     ../../Core/Src/transceiver.c
     ../../Core/Src/temp_sensor.c
     ../../Core/Src/potentiometer.c
-    ../../Core/Src/computer_interface.c
     ../../Core/Src/satellite_xcvr.c
     ../../Core/Src/helpers.c
     ../../Core/Src/dma.c

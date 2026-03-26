@@ -46,16 +46,7 @@ extern "C" {
 #define SENSOR_STACK_SIZE 128
 #define XCVR_RX_STACK_SIZE 256
 #define XCVR_TX_STACK_SIZE 256
-
-
-#ifdef BASE_STATION
-#define USB_TRANSMIT_STACK_SIZE 192
-#define USB_RECEIVE_STACK_SIZE 256
-#endif
-
-#ifdef SATELLITE
 #define SAT_XCVR_COMMAND_STACK_SIZE 512
-#endif
 /* USER CODE END EC */
 
 /* Exported macro ------------------------------------------------------------*/
@@ -78,14 +69,7 @@ void Error_Handler(void);
 void vXCVR_TXTask(void * pvParameters);
 void vSensorTask(void * pvParameters);
 void vXCVR_RXTask(void * pvParameters);
-#ifdef BASE_STATION
-void vUSBTransmitTask(void * pvParameters);
-void vUSBReceiveTask(void * pvParameters);
-#endif
-
-#ifdef SATELLITE
 void vSAT_XCVR_CommandTask(void * pvParameters);
-#endif
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

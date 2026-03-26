@@ -33,18 +33,11 @@
 #include "transceiver.h"
 #include "temp_sensor.h"
 #include "potentiometer.h"
-#include "usbd_cdc_if.h"
 #include "__public__ADF7030_1_fw_macro.h"
 #include "semphr.h"
 #include "commands.h"
 
-#ifdef BASE_STATION
-#include "computer_interface.h"
-#endif
-
-#ifdef SATELLITE
 #include "satellite_xcvr.h"
-#endif
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -59,10 +52,6 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-#ifdef BASE_STATION
-#define USB_RX_BUF_SIZE 128
-#endif
-
 #define ADC_NUM_CONVERSIONS 2
 
 /* USER CODE END PM */
@@ -77,22 +66,7 @@ float current_temperature;
 float current_potentiometer_percentage;
 
 
-#ifdef BASE_STATION
-QueueHandle_t xUSB_txQueue;
-
-SemaphoreHandle_t xUSBMutex;
-SemaphoreHandle_t xUSBReceiveSemaphore;
-
-extern uint8_t UserRxBufferFS[];
-extern USBD_HandleTypeDef hUsbDeviceFS;
-uint32_t usbRxLen;
-#endif
-
-#ifdef SATELLITE
-QueueHandle_t xUART_txQueue;
-QueueHandle_t xUART_rxQueue;
 SemaphoreHandle_t xUARTRxSemaphore;
-#endif
 
 QueueHandle_t xXCVR_txQueue;
 QueueHandle_t xXCVR_rxQueue;
@@ -107,7 +81,6 @@ static SemaphoreHandle_t xRXReadySemaphore;
 void SystemClock_Config(void);
 void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN PFP */
-static void formatPacketForUSB(data_packet_s *packetToSend);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -132,26 +105,10 @@ int main(void)
   TaskHandle_t xReceiveHandle = NULL;
   TaskHandle_t xSensorHandle = NULL;
 
-#ifdef BASE_STATION
-  xUSB_txQueue = xQueueCreate(5, sizeof(data_packet_s));
-
-  xUSBMutex = xSemaphoreCreateMutex();
-  xUSBReceiveSemaphore = xSemaphoreCreateBinary();
-
-  TaskHandle_t xUSBTransmitHandle = NULL;
-  TaskHandle_t xUSBReceiveHandle = NULL;
-
-  BaseType_t xUSBTransmitTaskReturned;
-  BaseType_t xUSBReceiveTaskReturned;
-#endif
-
-#ifdef SATELLITE
   BaseType_t xSAT_XCVR_CommandTaskReturned;
-
   TaskHandle_t xSAT_XCVR_CommandHandle = NULL;
 
   xUARTRxSemaphore = xSemaphoreCreateBinary();
-#endif
 
   xXCVRMutex = xSemaphoreCreateMutex();
   xRXReadySemaphore = xSemaphoreCreateBinary();
@@ -185,28 +142,6 @@ int main(void)
                           &xReceiveHandle);
 
   
-#ifdef BASE_STATION
-
-  xUSBTransmitTaskReturned = xTaskCreate(
-                              vUSBTransmitTask,
-                              "USBTransmit",
-                              USB_TRANSMIT_STACK_SIZE,
-                              NULL,
-                              2,
-                              &xUSBTransmitHandle);
-
-  xUSBReceiveTaskReturned = xTaskCreate(
-                              vUSBReceiveTask,
-                              "USBReceive",
-                              USB_RECEIVE_STACK_SIZE,
-                              NULL,
-                              2,
-                              &xUSBReceiveHandle);
-
-
-#endif
-#ifdef SATELLITE
-  
   xSAT_XCVR_CommandTaskReturned = xTaskCreate(
                               vSAT_XCVR_CommandTask,
                               "SAT_XCVR_Command",
@@ -214,8 +149,6 @@ int main(void)
                               NULL,
                               3,
                               &xSAT_XCVR_CommandHandle);
-
-#endif
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -360,65 +293,11 @@ void vXCVR_RXTask(void * pvParameters) {
       continue;
     }
 
-    // Depending on whether this is a satellite or a base station, push the received packet to the appropriate queue for processing
-#ifdef BASE_STATION
-    xQueueSend(xUSB_txQueue, &receivedPacket, portMAX_DELAY);
-#endif
-#ifdef SATELLITE
     xQueueSend(xXCVR_rxQueue, &receivedPacket, portMAX_DELAY);
-#endif
   }
 
   vTaskDelete(NULL);
 }
-
-#ifdef BASE_STATION
-void vUSBReceiveTask(void *pvParameters) {
-
-  uint8_t cmdBuf[USB_RX_BUF_SIZE];
-  uint32_t cmdLen;
-
-  for(;;) {
-
-    // Wait until a packet has been received over USB, then push it to the USB receive queue
-    xSemaphoreTake(xUSBReceiveSemaphore, portMAX_DELAY);
-
-    // Copy usb data to a local buffer
-    cmdLen = usbRxLen;
-    memcpy(cmdBuf, UserRxBufferFS, cmdLen);
-
-    // Re-arm USB
-    USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &UserRxBufferFS[0]);
-    USBD_CDC_ReceivePacket(&hUsbDeviceFS);
-
-    // Process the command received over USB
-    CI_processCommand(cmdBuf, cmdLen);
-  }
-
-  vTaskDelete(NULL);
-}
-
-void vUSBTransmitTask(void *pvParameters) {
-
-  for(;;) {
-
-    // Wait until there is a packet to send over USB, then send it
-    data_packet_s packetToSend;
-    xQueueReceive(xUSB_txQueue, &packetToSend, portMAX_DELAY);
-
-    formatPacketForUSB(&packetToSend);
-
-    // Wait until the USB is ready to transmit, then send the packet over USB
-    xSemaphoreTake(xUSBMutex, portMAX_DELAY);
-    USBD_CDC_SetTxBuffer(&hUsbDeviceFS, packetToSend.payload, packetToSend.length);
-    USBD_CDC_TransmitPacket(&hUsbDeviceFS);
-    xSemaphoreGive(xUSBMutex);
-  }
-
-  vTaskDelete(NULL);
-}
-#endif
-#ifdef SATELLITE
 
 void vSAT_XCVR_CommandTask(void * pvParameters) {
 
@@ -433,8 +312,6 @@ void vSAT_XCVR_CommandTask(void * pvParameters) {
 
   vTaskDelete(NULL);
 }
-
-#endif
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
   if(GPIO_Pin == GPIO_PIN_1) {
@@ -452,26 +329,12 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
   }
 }
 
-#ifdef SATELLITE
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
   if (huart->Instance == USART1) {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     xSemaphoreGiveFromISR(xUARTRxSemaphore, &xHigherPriorityTaskWoken);
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
   }
-}
-#endif
-
-// Add a start of frame marker to the packets
-static void formatPacketForUSB(data_packet_s *packetToSend) {
-
-  uint8_t newPacket[packetToSend->length + 2];
-  newPacket[0] = 0xAA;
-  newPacket[1] = 0x55;
-
-  memcpy(&newPacket[2], packetToSend->payload, packetToSend->length);
-  memcpy(packetToSend->payload, newPacket, packetToSend->length + 2);
-
 }
 /* USER CODE END 4 */
 

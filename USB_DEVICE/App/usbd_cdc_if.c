@@ -22,10 +22,6 @@
 #include "usbd_cdc_if.h"
 
 /* USER CODE BEGIN INCLUDE */
-#ifdef BASE_STATION
-#include "FreeRTOS.h"
-#include "semphr.h"
-#endif
 /* USER CODE END INCLUDE */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -111,10 +107,6 @@ uint8_t UserTxBufferFS[APP_TX_DATA_SIZE];
 extern USBD_HandleTypeDef hUsbDeviceFS;
 
 /* USER CODE BEGIN EXPORTED_VARIABLES */
-#ifdef BASE_STATION
-extern SemaphoreHandle_t xUSBReceiveSemaphore;
-extern uint32_t usbRxLen;
-#endif
 /* USER CODE END EXPORTED_VARIABLES */
 
 /**
@@ -265,16 +257,8 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
 static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 {
   /* USER CODE BEGIN 6 */
-#ifdef BASE_STATION
-  
-  usbRxLen = *Len;
-  BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-  xSemaphoreGiveFromISR(xUSBReceiveSemaphore, &xHigherPriorityTaskWoken);
-  portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-#else
   USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &Buf[0]);
   USBD_CDC_ReceivePacket(&hUsbDeviceFS);
-#endif
   return (USBD_OK);
   /* USER CODE END 6 */
 }
